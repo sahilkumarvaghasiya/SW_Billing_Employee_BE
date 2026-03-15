@@ -1,0 +1,56 @@
+# Python
+*.pyc
+*.pyo
+*.pyd
+__pycache__/
+*.sqlite3
+*.db
+*.log
+
+# Virtual environment
+venv/
+env/
+.venv/
+.env/
+.env
+
+# Django
+*.pot
+*.py[cod]
+__pycache__/
+local_settings.py
+db.sqlite3
+/media
+/staticfiles
+/static
+
+# MacOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# IDEs and editors
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Node / frontend (if you use npm / node)
+node_modules/
+
+# Coverage reports
+.coverage
+htmlcov/
+.tox/
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+
+# Pytest
+.pytest_cache/
+.pytest_cache/*
+
+# Django migrations (optional: usually you commit these)
+*/migrations/*.py
+!*/migrations/__init__.py
