@@ -31,7 +31,7 @@ SECRET_KEY = os.getenv("SECRET_KEY")
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv("DEBUG", "False").lower() == "true"
 
-ALLOWED_HOSTS = ["127.0.0.1", "localhost", "10.0.2.2"]
+ALLOWED_HOSTS = ["127.0.0.1", "localhost", "10.0.2.2", "*", "8435-2401-4900-ae2b-6669-f59d-2912-cf15-bc3.ngrok-free.app"]
 
 # Application definition
 
@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     'apps.accounts',
     'apps.products',
     'apps.shops',
+    'apps.vendors',
 
 ]
 CORS_ALLOWED_ORIGINS = [

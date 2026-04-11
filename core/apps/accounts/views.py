@@ -19,15 +19,15 @@ class LoginView(APIView):
         try:
             user = User.objects.get(email=email)
         except User.DoesNotExist:
-            return Response({"error": "Invalid credentials"}, status=400)
+            return Response({"error": "Login failed. Invalid email or password"}, status=400)
 
         user = authenticate(username=user.username, password=password)
 
         if user is None:
-            return Response({"error": "Invalid credentials"}, status=400)
+            return Response({"error": "Login failed. Invalid email or password"}, status=400)
         
         if user is None:
-            return Response({"error": "Invalid credentials"}, status=400)
+            return Response({"error": "Login failed. Invalid email or password"}, status=400)
 
         refresh = RefreshToken.for_user(user)
 
@@ -35,6 +35,8 @@ class LoginView(APIView):
             "access": str(refresh.access_token),
             "refresh": str(refresh),
             "user_id": user.id,
+            "user_name": user.username,
+            "shop_name": user.shop.name if user.shop else None,
             "role": user.role
         })
 
