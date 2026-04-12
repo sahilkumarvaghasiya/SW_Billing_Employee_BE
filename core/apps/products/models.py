@@ -70,9 +70,10 @@ class ItemType(NameMixin):
 class Product(models.Model):
 
     class GenderChoices(models.TextChoices):
-        MALE = 'male', 'Male'
-        FEMALE = 'female', 'Female'
-        UNISEX = 'unisex', 'Unisex'
+        MEN = 'men', 'Men'
+        WOMEN = 'women', 'Women'
+        BOY = 'boy', 'Boy'
+        GIRL = 'girl', 'Girl'
 
     shop = models.ForeignKey(Shop, on_delete=models.CASCADE, related_name="products")
     name = models.CharField(max_length=255)
@@ -116,10 +117,11 @@ class ProductVariant(models.Model):
         related_name="stock_variants",
     )
 
-    qr_code_number = models.CharField(max_length=100, unique=True, null=True, blank=True)
+    qr_code_number = models.CharField(max_length=100, unique=False, null=True, blank=True)
     qr_code_image = models.ImageField(upload_to="qr_codes/", null=True, blank=True)
     size = models.ForeignKey(Size, on_delete=models.SET_NULL, null=True, blank=True)
     color = models.ForeignKey(Color, on_delete=models.SET_NULL, null=True, blank=True)
+    original_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     price = models.DecimalField(max_digits=10, decimal_places=2)
     discount_percent = models.FloatField(default=0)
     discount_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
@@ -148,6 +150,11 @@ class ProductVariant(models.Model):
             return price - self.discount_amount
 
         return price
+
+    def save(self, *args, **kwargs):
+        if self.original_price is None:
+            self.original_price = self.price
+        super().save(*args, **kwargs)
 
     def is_low_stock(self):
         return self.quantity <= self.low_stock_threshold

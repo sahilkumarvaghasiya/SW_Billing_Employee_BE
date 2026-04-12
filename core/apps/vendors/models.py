@@ -42,9 +42,9 @@ class Vendor(models.Model):
 class StockEntry(models.Model):
 
     class StatusChoices(models.TextChoices):
-        PENDING = "pending", "Pending"
         PARTIAL = "partial", "Partially Paid"
         PAID = "paid", "Paid"
+        UNPAID = "unpaid", "Unpaid"
 
     shop = models.ForeignKey(
         Shop,
@@ -63,11 +63,12 @@ class StockEntry(models.Model):
     status = models.CharField(
         max_length=10,
         choices=StatusChoices.choices,
-        default=StatusChoices.PENDING,
+        default=StatusChoices.UNPAID,
         db_index=True
     )
     due_date = models.DateField(null=True, blank=True)
     notes = models.TextField(blank=True, null=True)
+    is_fully_paid = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -99,19 +100,21 @@ class StockEntry(models.Model):
             raise ValueError("Paid amount cannot exceed total amount")
 
     def save(self, *args, **kwargs):
-        self.full_clean()
         if not self.invoice_number:
             self.invoice_number = self.generate_invoice_number()
+
+        self.full_clean()
 
         paid = self.paid_amount or 0
         total = self.total_amount or 0
 
         if paid >= total and total > 0:
             self.status = self.StatusChoices.PAID
+            self.is_fully_paid = True
         elif paid > 0:
             self.status = self.StatusChoices.PARTIAL
         else:
-            self.status = self.StatusChoices.PENDING
+            self.status = self.StatusChoices.UNPAID
 
         super().save(*args, **kwargs)
 
