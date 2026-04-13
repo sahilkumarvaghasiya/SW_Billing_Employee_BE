@@ -350,10 +350,10 @@ class VendorStockHistoryListViewset(viewsets.ReadOnlyModelViewSet):
 
         if status_filter == StockEntry.StatusChoices.PAID:
             queryset = queryset.filter(status=StockEntry.StatusChoices.PAID, is_fully_paid=True)
-        elif status_filter == StockEntry.StatusChoices.UNPAID:
-            queryset = queryset.filter(status=StockEntry.StatusChoices.UNPAID, is_fully_paid=False)
         elif status_filter == StockEntry.StatusChoices.PARTIAL:
             queryset = queryset.filter(status=StockEntry.StatusChoices.PARTIAL, is_fully_paid=False)
+        else:
+            queryset = queryset.filter(status=StockEntry.StatusChoices.UNPAID, is_fully_paid=False)
 
    
         if parsed_start_date:

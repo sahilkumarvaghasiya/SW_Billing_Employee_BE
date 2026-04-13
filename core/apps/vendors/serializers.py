@@ -81,5 +81,6 @@ class VendorExistingStockCreateSerializer(serializers.Serializer):
 
 
 class VendorListSerializer(serializers.Serializer):
+    id = serializers.IntegerField(read_only=True)
     vendor_name = serializers.CharField(source="name", read_only=True)
     phone = serializers.CharField(read_only=True)
