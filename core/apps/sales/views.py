@@ -9,12 +9,14 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from apps.accounts.permissions import IsEmployee
 from apps.products.models import ProductVariant
+from apps.sales.notifications import handle_stock_level_notification
 from apps.sales.pagination import SalesBarcodeLookupPagination, SalesHistoryPagination
-from apps.sales.models import Bill, BillItem, Customer, PaymentConfig
+from apps.sales.models import Bill, BillItem, Customer, Notification, PaymentConfig
 from apps.sales.serializers import (
     BillCreateSerializer,
     BarcodeLookupProductSerializer,
     CustomerLookupSerializer,
+    NotificationUnreadSerializer,
     PaymentConfigQRListSerializer,
     SalesHistoryDetailSerializer,
     SalesHistoryListSerializer,
@@ -137,6 +139,7 @@ class SalesHistoryListViewSet(viewsets.ReadOnlyModelViewSet):
         start_date_param = (params.get("start_date") or "").strip()
         end_date_param = (params.get("end_date") or "").strip()
         max_total_param = (params.get("max_total") or "").strip()
+        search = (params.get("search") or "").strip()
 
         parsed_start_date = None
         parsed_end_date = None
@@ -174,6 +177,9 @@ class SalesHistoryListViewSet(viewsets.ReadOnlyModelViewSet):
                 raise ValidationError({"max_total": ["Invalid amount format."]}) from exc
 
             queryset = queryset.filter(total_amount__lte=max_total)
+
+        if search:
+            queryset = queryset.filter(customer__name__icontains=search)
 
         return queryset.order_by("-created_at")
 
@@ -270,6 +276,7 @@ class BillCreateViewSet(viewsets.ModelViewSet):
 
             item["variant"].quantity -= item["quantity"]
             item["variant"].save(update_fields=["quantity", "updated_at"])
+            handle_stock_level_notification(item["variant"])
 
         BillItem.objects.bulk_create(bill_items)
 
@@ -316,6 +323,63 @@ class BillCreateViewSet(viewsets.ModelViewSet):
                 "created_at": bill.created_at,
             },
             status=status.HTTP_201_CREATED,
+        )
+
+
+class NotificationUnreadListViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class = NotificationUnreadSerializer
+    permission_classes = [IsEmployee]
+    http_method_names = ["get"]
+
+    def get_queryset(self):
+        return Notification.objects.filter(
+            shop=self.request.user.shop,
+            is_read=False,
+        ).order_by("-created_at")
+
+    def list(self, request, *args, **kwargs):
+        unread_queryset = self.get_queryset()
+        unread_total = unread_queryset.count()
+        latest_unread = unread_queryset[:15]
+
+        serializer = self.get_serializer(latest_unread, many=True)
+        return Response(
+            {
+                "total_unread": unread_total,
+                "notifications": serializer.data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class NotificationMarkReadViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsEmployee]
+    http_method_names = ["post"]
+    queryset = Notification.objects.none()
+
+    def create(self, request, *args, **kwargs):
+        notification_ids = request.data.get("notification_ids")
+        unread_queryset = Notification.objects.filter(
+            shop=request.user.shop,
+            is_read=False,
+        )
+
+        if isinstance(notification_ids, list) and notification_ids:
+            unread_queryset = unread_queryset.filter(id__in=notification_ids)
+
+        updated = unread_queryset.update(is_read=True)
+        remaining_unread = Notification.objects.filter(
+            shop=request.user.shop,
+            is_read=False,
+        ).count()
+
+        return Response(
+            {
+                "message": "Notifications marked as read.",
+                "updated_count": updated,
+                "total_unread": remaining_unread,
+            },
+            status=status.HTTP_200_OK,
         )
 
 

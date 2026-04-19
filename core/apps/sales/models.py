@@ -181,3 +181,60 @@ class BillItem(models.Model):
             rounding=ROUND_HALF_UP,
         )
         super().save(*args, **kwargs)
+
+
+class Notification(models.Model):
+    class Type(models.TextChoices):
+        LOW_STOCK = "LOW_STOCK", "Low stock"
+        OUT_OF_STOCK = "OUT_OF_STOCK", "Out of stock"
+        VENDOR_PAYMENT_DUE = "VENDOR_PAYMENT_DUE", "Vendor payment due"
+
+    class Priority(models.TextChoices):
+        LOW = "low", "Low"
+        MEDIUM = "medium", "Medium"
+        HIGH = "high", "High"
+
+    shop = models.ForeignKey(Shop, on_delete=models.CASCADE, related_name="notifications")
+    type = models.CharField(max_length=30, choices=Type.choices, db_index=True)
+    title = models.CharField(max_length=120)
+    message = models.TextField()
+    priority = models.CharField(max_length=10, choices=Priority.choices, default=Priority.MEDIUM)
+    is_read = models.BooleanField(default=False, db_index=True)
+    product_variant = models.ForeignKey(
+        ProductVariant,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="notifications",
+    )
+    stock_entry = models.ForeignKey(
+        "vendors.StockEntry",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="notifications",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["shop", "is_read", "created_at"]),
+            models.Index(fields=["shop", "type", "is_read"]),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["shop", "type", "product_variant"],
+                condition=models.Q(is_read=False),
+                name="uniq_unread_variant_notification_per_type",
+            ),
+            models.UniqueConstraint(
+                fields=["shop", "type", "stock_entry"],
+                condition=models.Q(is_read=False),
+                name="uniq_unread_stock_entry_notification_per_type",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.get_type_display()} - {self.shop_id}"

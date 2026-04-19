@@ -3,6 +3,8 @@ from apps.sales.views import (
     BarcodeProductLookupListView,
     BillCreateViewSet,
     CustomerLookupByPhoneViewSet,
+    NotificationMarkReadViewSet,
+    NotificationUnreadListViewSet,
     PaymentConfigQRListViewSet,
     SalesHistoryDetailViewSet,
     SalesHistoryListViewSet,
@@ -18,4 +20,6 @@ urlpatterns = [
     path("today-summary/", TodaySummaryViewSet.as_view({"get": "list"})),
     path("historylist/", SalesHistoryListViewSet.as_view({"get": "list"})),
     path("saleshistory/details/<uuid:pk>/", SalesHistoryDetailViewSet.as_view({"get": "retrieve"})),
+    path("notifications/", NotificationUnreadListViewSet.as_view({"get": "list"})),
+    path("notifications/mark-read/", NotificationMarkReadViewSet.as_view({"post": "create"})),
 ]

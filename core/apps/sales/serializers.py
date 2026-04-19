@@ -1,10 +1,11 @@
 from decimal import Decimal
+from datetime import timedelta
 
 from django.utils import timezone
 from rest_framework import serializers
 
 from apps.products.models import ProductVariant
-from apps.sales.models import Bill, BillItem, Customer, PaymentConfig
+from apps.sales.models import Bill, BillItem, Customer, Notification, PaymentConfig
 
 
 class BarcodeLookupProductSerializer(serializers.ModelSerializer):
@@ -292,3 +293,35 @@ class BillCreateSerializer(serializers.Serializer):
         attrs["computed_total_amount"] = total_amount
         attrs["computed_paid_amount"] = total_amount
         return attrs
+
+
+class NotificationUnreadSerializer(serializers.ModelSerializer):
+    display_date = serializers.SerializerMethodField()
+    display_time = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Notification
+        fields = [
+            "id",
+            "type",
+            "title",
+            "message",
+            "priority",
+            "display_date",
+            "display_time",
+            "is_read",
+        ]
+
+    def get_display_date(self, obj):
+        local_dt = timezone.localtime(obj.created_at)
+        today = timezone.localdate()
+        created_date = local_dt.date()
+
+        if created_date == today:
+            return "Today"
+        if created_date == (today - timedelta(days=1)):
+            return "Yesterday"
+        return created_date.isoformat()
+
+    def get_display_time(self, obj):
+        return timezone.localtime(obj.created_at).strftime("%I:%M %p")

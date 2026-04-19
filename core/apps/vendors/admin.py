@@ -5,9 +5,9 @@ from apps.vendors.models import Vendor, StockEntry
 
 @admin.register(Vendor)
 class VendorAdmin(admin.ModelAdmin):
-    list_display = ("id",)
+    list_display = ("id", "name")
  
 
 @admin.register(StockEntry)
 class StockEntryAdmin(admin.ModelAdmin):
-    list_display = ("id",)
+    list_display = ("id", "vendor")

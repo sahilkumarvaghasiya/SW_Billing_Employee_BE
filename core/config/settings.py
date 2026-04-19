@@ -12,9 +12,16 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 
 from pathlib import Path
 from datetime import timedelta
+from celery.schedules import crontab
+import sys
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
+CORE_DIR = BASE_DIR / "core"
+
+if str(CORE_DIR) not in sys.path:
+    sys.path.insert(0, str(CORE_DIR))
+
 import os
 from dotenv import load_dotenv
 
@@ -168,4 +175,25 @@ SIMPLE_JWT = {
     "ROTATE_REFRESH_TOKENS": True,                  # new refresh every time
     "BLACKLIST_AFTER_ROTATION": True,               # old refresh invalid
     "AUTH_HEADER_TYPES": ("Bearer",),
+}
+
+
+CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://127.0.0.1:6379/0")
+CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", CELERY_BROKER_URL)
+CELERY_TIMEZONE = TIME_ZONE
+
+VENDOR_DUE_ALERT_DAYS_BEFORE = int(os.getenv("VENDOR_DUE_ALERT_DAYS_BEFORE", "5"))
+
+# CELERY_BEAT_SCHEDULE = {
+#     "vendor-payment-due-alerts-every-morning": {
+#         "task": "apps.vendors.tasks.process_vendor_payment_due_alerts",
+#         "schedule": crontab(hour=8, minute=0),
+#     },
+# }
+
+CELERY_BEAT_SCHEDULE = {
+    "vendor-payment-due-alerts-every-minute": {
+        "task": "apps.vendors.tasks.process_vendor_payment_due_alerts",
+        "schedule": 30.0,  # every 60 seconds
+    },
 }

@@ -54,3 +54,6 @@ coverage.xml
 # Django migrations (optional: usually you commit these)
 */migrations/*.py
 !*/migrations/__init__.py
+celerybeat-schedule
+celerybeat-schedule-shm
+celerybeat-schedule-wal

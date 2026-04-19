@@ -23,6 +23,51 @@ from apps.vendors.utils import (
 )
 
 
+def resolve_name_or_id(model_class, raw_value, shop):
+    """Resolve catalog entities from dropdown ID or free-text value.
+
+    Rules:
+    - Explicit dropdown IDs are resolved only when input is int or {'id': <int>}.
+    - Plain strings (including numeric strings like "23") are treated as text names.
+    - Text names are normalized to lowercase and resolved via get_or_create.
+    """
+
+    if isinstance(raw_value, bool):
+        raise ValueError("Invalid value.")
+
+    if isinstance(raw_value, dict):
+        if raw_value.get("id") not in (None, ""):
+            dropdown_id = raw_value.get("id")
+            try:
+                parsed_id = int(str(dropdown_id).strip())
+            except (TypeError, ValueError):
+                raise ValueError("Invalid dropdown id.")
+
+            obj = model_class.objects.filter(shop=shop, id=parsed_id).first()
+            if obj is not None:
+                return obj
+            raise ValueError("Selected dropdown item does not exist.")
+
+        raw_value = raw_value.get("text", raw_value.get("value", raw_value.get("name")))
+
+    if isinstance(raw_value, int):
+        obj = model_class.objects.filter(shop=shop, id=raw_value).first()
+        if obj is not None:
+            return obj
+        raise ValueError("Selected dropdown item does not exist.")
+
+    value = "" if raw_value is None else str(raw_value).strip()
+
+    if not value:
+        raise ValueError("This field is required.")
+
+    obj, _ = model_class.objects.get_or_create(
+        shop=shop,
+        name=value.lower(),
+    )
+    return obj
+
+
 class GenerateBarcodeViewSet(viewsets.ModelViewSet):
     queryset = StockEntry.objects.none()
     serializer_class = GenerateBarcodeRequestSerializer
@@ -78,7 +123,7 @@ class VendorStockCreateViewSet(viewsets.ModelViewSet):
         if existing_vendor:
             return Response(
                 {
-                    "message": "Vendor already exists with same phone number or gst number."
+                    "message": "Vendor already exists"
                     
                 },
                 status=status.HTTP_400_BAD_REQUEST,
@@ -107,14 +152,18 @@ class VendorStockCreateViewSet(viewsets.ModelViewSet):
 
         for product_data in data["products"]:
             gender = normalize_gender(product_data["gender"])
-            item_type, _ = ItemType.objects.get_or_create(
-                shop=shop,
-                name=product_data["product_type"].strip().lower(),
-            )
+
+            try:
+                item_type = resolve_name_or_id(ItemType, product_data["product_type"], shop)
+            except ValueError:
+                return Response(
+                    {"message": ["product_type is required."]},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
             product = Product.objects.create(
                 shop=shop,
-                name=product_data["product_type"],
+                name=item_type.name,
                 company_name=product_data["company_name"],
                 gender=gender,
                 item_type=item_type,
@@ -132,20 +181,20 @@ class VendorStockCreateViewSet(viewsets.ModelViewSet):
                 image_db_path = relative_media_path(barcode_url)
 
             for variant_data in product_data["item_variants"]:
-                size_obj, _ = Size.objects.get_or_create(
-                    shop=shop,
-                    name=variant_data["size"].strip().lower(),
-                )
-                color_obj, _ = Color.objects.get_or_create(
-                    shop=shop,
-                    name=variant_data["colour"].strip().lower(),
-                )
+                try:
+                    size_obj = resolve_name_or_id(Size, variant_data["size"], shop)
+                    color_obj = resolve_name_or_id(Color, variant_data["colour"], shop)
+                except ValueError:
+                    return Response(
+                        {"message": ["size and colour are required for each variant."]},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
 
                 ProductVariant.objects.create(
                     product=product,
                     stock_entry=stock_entry,
                     barcode_number=barcode_number,
-                    qr_code_image=image_db_path,
+                    barcode_image=image_db_path,
                     size=size_obj,
                     color=color_obj,
                     original_price=variant_data["sellprice"],
@@ -215,14 +264,17 @@ class VendorExistingStockCreateViewSet(viewsets.ModelViewSet):
 
         for product_data in data["products"]:
             gender = normalize_gender(product_data["gender"])
-            item_type, _ = ItemType.objects.get_or_create(
-                shop=shop,
-                name=product_data["product_type"].strip().lower(),
-            )
+            try:
+                item_type = resolve_name_or_id(ItemType, product_data["product_type"], shop)
+            except ValueError:
+                return Response(
+                    {"message": ["product_type is required."]},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
             product = Product.objects.create(
                 shop=shop,
-                name=product_data["product_type"],
+                name=item_type.name,
                 company_name=product_data["company_name"],
                 gender=gender,
                 item_type=item_type,
@@ -240,20 +292,20 @@ class VendorExistingStockCreateViewSet(viewsets.ModelViewSet):
                 image_db_path = relative_media_path(barcode_url)
 
             for variant_data in product_data["item_variants"]:
-                size_obj, _ = Size.objects.get_or_create(
-                    shop=shop,
-                    name=variant_data["size"].strip().lower(),
-                )
-                color_obj, _ = Color.objects.get_or_create(
-                    shop=shop,
-                    name=variant_data["colour"].strip().lower(),
-                )
+                try:
+                    size_obj = resolve_name_or_id(Size, variant_data["size"], shop)
+                    color_obj = resolve_name_or_id(Color, variant_data["colour"], shop)
+                except ValueError:
+                    return Response(
+                        {"message": ["size and colour are required for each variant."]},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
 
                 ProductVariant.objects.create(
                     product=product,
                     stock_entry=stock_entry,
                     barcode_number=barcode_number,
-                    qr_code_image=image_db_path,
+                    barcode_image=image_db_path,
                     size=size_obj,
                     color=color_obj,
                     original_price=variant_data["sellprice"],

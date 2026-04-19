@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django import forms
 from django.db import models as django_models
-from apps.sales.models import Bill, BillItem, Customer, PaymentConfig
+from apps.sales.models import Bill, BillItem, Customer, Notification, PaymentConfig
 
 
 @admin.register(Customer)
@@ -117,5 +117,31 @@ class BillItemAdmin(admin.ModelAdmin):
 	list_filter = (
 		"bill__shop",
 		"created_at",
+	)
+	ordering = ("-created_at",)
+
+
+@admin.register(Notification)
+class NotificationAdmin(admin.ModelAdmin):
+	list_display = (
+		"id",
+		"shop",
+		"type",
+		"priority",
+		"is_read",
+		"product_variant",
+		"stock_entry",
+		"created_at",
+	)
+	search_fields = (
+		"title",
+		"message",
+		"stock_entry__invoice_number",
+	)
+	list_filter = (
+		"shop",
+		"type",
+		"priority",
+		"is_read",
 	)
 	ordering = ("-created_at",)

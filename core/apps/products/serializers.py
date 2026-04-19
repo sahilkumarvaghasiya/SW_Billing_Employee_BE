@@ -1,6 +1,6 @@
 
 from rest_framework import serializers
-from apps.products.models import ProductVariant
+from apps.products.models import Color, ItemType, ProductVariant, Size
 
 
 class ProductVariantListSerializer(serializers.ModelSerializer):
@@ -45,9 +45,27 @@ class ProductVariantDetailSerializer(serializers.ModelSerializer):
             "final_price",
             "quantity",
             "barcode_number",
-            "qr_code_image",
+            "barcode_image",
             "description",
         ]
 
     def get_final_price(self, obj):
         return obj.final_price()
+
+
+class SizeDropdownSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Size
+        fields = ["id", "name", "created_at"]
+
+
+class ItemTypeDropdownSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ItemType
+        fields = ["id", "name", "created_at"]
+
+
+class ColorDropdownSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Color
+        fields = ["id", "name", "created_at"]

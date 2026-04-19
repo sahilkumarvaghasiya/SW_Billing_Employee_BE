@@ -1,16 +1,66 @@
 from rest_framework import serializers
 
 
+class LookupValueField(serializers.Field):
+    """Accept either dropdown ID or free-text value."""
+
+    default_error_messages = {
+        "invalid": "Invalid value. Use a string, integer, or object with id/text.",
+        "blank": "This field may not be blank.",
+        "invalid_id": "Dropdown id must be a valid integer.",
+    }
+
+    def to_internal_value(self, data):
+        if isinstance(data, bool):
+            self.fail("invalid")
+
+        if isinstance(data, int):
+            return data
+
+        if isinstance(data, str):
+            value = data.strip()
+            if not value:
+                self.fail("blank")
+            return value
+
+        if isinstance(data, dict):
+            if data.get("id") not in (None, ""):
+                raw_id = data.get("id")
+                try:
+                    parsed_id = int(str(raw_id).strip())
+                except (TypeError, ValueError):
+                    self.fail("invalid_id")
+                return {"id": parsed_id}
+
+            text_value = data.get("text")
+            if text_value is None:
+                text_value = data.get("value", data.get("name"))
+
+            if text_value is None:
+                self.fail("invalid")
+
+            value = str(text_value).strip()
+            if not value:
+                self.fail("blank")
+
+            return {"text": value}
+
+        self.fail("invalid")
+
+    def to_representation(self, value):
+        return value
+
+
 class BarcodeItemVariantSerializer(serializers.Serializer):
-    size = serializers.CharField(max_length=50)
-    colour = serializers.CharField(max_length=50)
+    size = LookupValueField()
+    colour = LookupValueField()
     pieces = serializers.IntegerField(min_value=1)
     sellprice = serializers.DecimalField(max_digits=10, decimal_places=2, min_value=0.01)
 
 
 class GenerateBarcodeRequestSerializer(serializers.Serializer):
     company_name = serializers.CharField(max_length=255)
-    product_type = serializers.CharField(max_length=100)
+    product_type = LookupValueField()
     gender = serializers.ChoiceField(choices=["boy", "girl", "men", "women"])
     item_variants = BarcodeItemVariantSerializer(many=True)
 
@@ -21,15 +71,15 @@ class GenerateBarcodeRequestSerializer(serializers.Serializer):
 
 
 class StockProductVariantSerializer(serializers.Serializer):
-    size = serializers.CharField(max_length=50)
-    colour = serializers.CharField(max_length=50)
+    size = LookupValueField()
+    colour = LookupValueField()
     pieces = serializers.IntegerField(min_value=1)
     sellprice = serializers.DecimalField(max_digits=10, decimal_places=2, min_value=0.01)
 
 
 class StockProductSerializer(serializers.Serializer):
     company_name = serializers.CharField(max_length=255)
-    product_type = serializers.CharField(max_length=100)
+    product_type = LookupValueField()
     gender = serializers.ChoiceField(choices=["boy", "girl", "men", "women"])
     barcode_number = serializers.CharField(max_length=100)
     barcode_url = serializers.CharField(required=False, allow_null=True, allow_blank=True)

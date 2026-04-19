@@ -1,5 +1,6 @@
 from django.db import models
 from django.db.models.functions import Lower
+from datetime import timedelta
 from apps.shops.models import Shop
 from django.utils import timezone
 from django.db.models import Count
@@ -120,5 +121,66 @@ class StockEntry(models.Model):
 
         super().save(*args, **kwargs)
 
+        if self.is_fully_paid:
+            from apps.sales.notifications import mark_vendor_payment_due_notification_resolved
+            mark_vendor_payment_due_notification_resolved(self)
+
     def __str__(self):
         return self.invoice_number
+
+    def alert_start_date(self, alert_before_days=5):
+        if not self.due_date:
+            return None
+        return self.due_date - timedelta(days=alert_before_days)
+
+    def alert_first_display_date(self, alert_before_days=5):
+        """Return first date when alert should be visible.
+
+        Formula:
+            first_display = max(due_date - alert_before_days, entry_date) + 1 day
+        """
+        if not self.due_date:
+            return None
+
+        alert_start = self.alert_start_date(alert_before_days=alert_before_days)
+        entry_date = timezone.localtime(self.created_at).date()
+        return max(alert_start, entry_date) + timedelta(days=1)
+
+    def should_show_due_alert(self, target_date=None, alert_before_days=5):
+        if self.is_fully_paid:
+            return False
+
+        if self.status == self.StatusChoices.PAID:
+            return False
+
+        if not self.due_date:
+            return False
+
+        if target_date is None:
+            target_date = timezone.localdate()
+
+        first_display_date = self.alert_first_display_date(alert_before_days=alert_before_days)
+        if not first_display_date:
+            return False
+
+        return first_display_date <= target_date <= self.due_date
+
+    @classmethod
+    def due_alert_entries_for_date(cls, target_date=None, alert_before_days=5):
+        if target_date is None:
+            target_date = timezone.localdate()
+
+        candidate_entries = cls.objects.select_related("vendor", "shop").filter(
+            due_date__isnull=False,
+            is_fully_paid=False,
+            due_date__gte=target_date,
+        )
+
+        return [
+            entry
+            for entry in candidate_entries
+            if entry.should_show_due_alert(
+                target_date=target_date,
+                alert_before_days=alert_before_days,
+            )
+        ]
