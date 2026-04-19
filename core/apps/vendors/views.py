@@ -62,17 +62,23 @@ class VendorStockCreateViewSet(viewsets.ModelViewSet):
         shop = request.user.shop
         vendor_name = data["vendor_name"].strip().lower()
         vendor_address = (data.get("vendor_address") or "").strip()
+        vendor_phone = (data.get("phone") or "").strip()
+        vendor_email = (data.get("email") or "").strip().lower() or None
+        vendor_gst_number = (data.get("gst_number") or "").strip()
+
+        duplicate_filter = Q(phone=vendor_phone) | Q(gst_number__iexact=vendor_gst_number)
 
         existing_vendor = (
             Vendor.objects.only("id")
-            .filter(shop=shop, name=vendor_name)
+            .filter(shop=shop)
+            .filter(duplicate_filter)
             .first()
         )
 
         if existing_vendor:
             return Response(
                 {
-                    "message": "Vendor already exists. Use existing vendor stock API for this vendor."
+                    "message": "Vendor already exists with same phone number or gst number."
                     
                 },
                 status=status.HTTP_400_BAD_REQUEST,
@@ -82,6 +88,9 @@ class VendorStockCreateViewSet(viewsets.ModelViewSet):
             shop=shop,
             name=vendor_name,
             address=vendor_address,
+            phone=vendor_phone,
+            email=vendor_email,
+            gst_number=vendor_gst_number,
             is_active=True,
         )
 
@@ -135,7 +144,7 @@ class VendorStockCreateViewSet(viewsets.ModelViewSet):
                 ProductVariant.objects.create(
                     product=product,
                     stock_entry=stock_entry,
-                    qr_code_number=barcode_number,
+                    barcode_number=barcode_number,
                     qr_code_image=image_db_path,
                     size=size_obj,
                     color=color_obj,
@@ -186,7 +195,7 @@ class VendorExistingStockCreateViewSet(viewsets.ModelViewSet):
         vendor_id = kwargs.get("id")
         if vendor_id is None:
             return Response(
-                {"message": ["Vendor id path parameter is required."]},
+                {"message": ["Vendor is required."]},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -243,7 +252,7 @@ class VendorExistingStockCreateViewSet(viewsets.ModelViewSet):
                 ProductVariant.objects.create(
                     product=product,
                     stock_entry=stock_entry,
-                    qr_code_number=barcode_number,
+                    barcode_number=barcode_number,
                     qr_code_image=image_db_path,
                     size=size_obj,
                     color=color_obj,
@@ -417,7 +426,7 @@ class VendorStockHistoryDetailsViewset(viewsets.ReadOnlyModelViewSet):
             pid = p.id
             if pid not in products:
                 products[pid] = {
-                    "product_name": p.name,
+                    "product_name": p.item_type.name if p.item_type else p.name,
                     "company_name": p.company_name,
                     "gender": p.gender,
                     "variants": [],

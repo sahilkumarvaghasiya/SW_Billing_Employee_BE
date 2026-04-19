@@ -1,9 +1,12 @@
 from django.contrib.auth import authenticate
 from rest_framework.permissions import IsAuthenticated, AllowAny
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from apps.accounts.serializers import EmployeeCreateSerializer
+from apps.accounts.serializers import EmployeeCreateSerializer, ChangePasswordSerializer, LogoutSerializer
 from apps.accounts.models import User  
 
 
@@ -56,3 +59,41 @@ class CreateEmployeeView(APIView):
             return Response({"message": "Employee created"})
 
         return Response(serializer.errors)
+
+
+class ChangePasswordView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = ChangePasswordSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        new_password = serializer.validated_data["new_password"]
+
+        try:
+            validate_password(new_password, request.user)
+        except DjangoValidationError as exc:
+            return Response({"new_password": exc.messages}, status=400)
+
+        request.user.set_password(new_password)
+        request.user.save(update_fields=["password"])
+
+        return Response({"message": "Password changed successfully."}, status=200)
+
+
+class LogoutView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = LogoutSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        refresh_token = serializer.validated_data["refresh"]
+
+        try:
+            token = RefreshToken(refresh_token)
+            token.blacklist()
+        except TokenError:
+            return Response({"error": "Invalid or expired refresh token."}, status=400)
+
+        return Response({"message": "Logout successful."}, status=200)

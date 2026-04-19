@@ -22,6 +22,7 @@ class ProductVariantFilter(django_filters.FilterSet):
             return queryset
 
         return queryset.filter(
+            Q(product__item_type__name__icontains=value) |
             Q(product__name__icontains=value) |
             Q(product__company_name__icontains=value)
         )

@@ -1,4 +1,4 @@
-from rest_framework import generics
+from rest_framework import viewsets
 from apps.accounts.permissions import IsEmployee
 from django_filters.rest_framework import DjangoFilterBackend
 from apps.products.models import ProductVariant
@@ -9,8 +9,7 @@ from apps.products.serializers import (
 from apps.products.filters import ProductVariantFilter
 from apps.products.pagination import ProductPagination
 
-
-class ProductVariantListView(generics.ListAPIView):
+class ProductVariantListView(viewsets.ReadOnlyModelViewSet):
     serializer_class = ProductVariantListSerializer
     pagination_class = ProductPagination
     filter_backends = [DjangoFilterBackend]
@@ -27,8 +26,7 @@ class ProductVariantListView(generics.ListAPIView):
             is_active=True
         ).order_by("-created_at")
     
-
-class ProductVariantDetailView(generics.RetrieveAPIView):
+class ProductVariantDetailView(viewsets.ReadOnlyModelViewSet):
     serializer_class = ProductVariantDetailSerializer
     permission_classes = [IsEmployee]
 

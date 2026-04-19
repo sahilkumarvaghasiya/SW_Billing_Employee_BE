@@ -1,0 +1,21 @@
+from django.urls import path
+from apps.sales.views import (
+    BarcodeProductLookupListView,
+    BillCreateViewSet,
+    CustomerLookupByPhoneViewSet,
+    PaymentConfigQRListViewSet,
+    SalesHistoryDetailViewSet,
+    SalesHistoryListViewSet,
+    TodaySummaryViewSet,
+)
+
+
+urlpatterns = [
+    path("barcode-lookup/<str:barcode_number>/", BarcodeProductLookupListView.as_view({"get": "list"})),
+    path("customer-lookup/<str:phone>/", CustomerLookupByPhoneViewSet.as_view({"get": "list"})),
+    path("payment-configs/qr/", PaymentConfigQRListViewSet.as_view({"get": "list"})),
+    path("bills/create/", BillCreateViewSet.as_view({"post": "create"})),
+    path("today-summary/", TodaySummaryViewSet.as_view({"get": "list"})),
+    path("historylist/", SalesHistoryListViewSet.as_view({"get": "list"})),
+    path("saleshistory/details/<uuid:pk>/", SalesHistoryDetailViewSet.as_view({"get": "retrieve"})),
+]

@@ -110,7 +110,7 @@ class Command(BaseCommand):
                 variant = ProductVariant.objects.create(
                     product=product,
                     stock_entry=random.choice(stock_entries),
-                    qr_code_number=f"{DUMMY_TAG}-{shop.id}-{gender}-{idx}",
+                    barcode_number=f"{DUMMY_TAG}-{shop.id}-{gender}-{idx}",
                     size=random.choice(sizes),
                     color=random.choice(colors),
                     price=base_price,

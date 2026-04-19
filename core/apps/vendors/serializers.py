@@ -16,7 +16,7 @@ class GenerateBarcodeRequestSerializer(serializers.Serializer):
 
     def validate_item_variants(self, value):
         if not value:
-            raise serializers.ValidationError("At least one item variant is required.")
+            raise serializers.ValidationError({"item_variants": "At least one item variant is required."})
         return value
 
 
@@ -37,13 +37,16 @@ class StockProductSerializer(serializers.Serializer):
 
     def validate_item_variants(self, value):
         if not value:
-            raise serializers.ValidationError("At least one item variant is required.")
+            raise serializers.ValidationError({"item_variants": "At least one item variant is required."})
         return value
 
 
 class VendorStockCreateSerializer(serializers.Serializer):
     vendor_name = serializers.CharField(max_length=255)
     vendor_address=serializers.CharField(max_length=500, required=False, allow_blank=True, allow_null=True)
+    phone = serializers.CharField(max_length=20, required=True)
+    email = serializers.EmailField(required=False, allow_blank=True, allow_null=True)
+    gst_number = serializers.CharField(max_length=50, required=True)
     total_amount = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=0)
     paid_amount = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=0)
     paymentdeadlinedate = serializers.DateField()
@@ -52,10 +55,22 @@ class VendorStockCreateSerializer(serializers.Serializer):
 
     def validate_products(self, value):
         if not value:
-            raise serializers.ValidationError("At least one product is required.")
+            raise serializers.ValidationError({"products": "At least one product is required."})
         return value
 
     def validate(self, attrs):
+        phone = (attrs.get("phone") or "").strip()
+        gst_number = (attrs.get("gst_number") or "").strip()
+
+        if not phone:
+            raise serializers.ValidationError({"phone": "Phone number is required."})
+
+        if not gst_number:
+            raise serializers.ValidationError({"gst_number": "GST number is required."})
+
+        attrs["phone"] = phone
+        attrs["gst_number"] = gst_number
+
         if attrs["paid_amount"] > attrs["total_amount"]:
             raise serializers.ValidationError({"paid_amount": "Paid amount cannot exceed total amount."})
         return attrs
@@ -71,7 +86,7 @@ class VendorExistingStockCreateSerializer(serializers.Serializer):
 
     def validate_products(self, value):
         if not value:
-            raise serializers.ValidationError("At least one product is required.")
+            raise serializers.ValidationError({"products": "At least one product is required."})
         return value
 
     def validate(self, attrs):

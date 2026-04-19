@@ -32,7 +32,7 @@ class ProductVariantAdmin(admin.ModelAdmin):
     list_display = (
         "id",
         "product",
-        "qr_code_number",
+        "barcode_number",
         "size",
         "price",
         "discount_percent",
@@ -42,7 +42,7 @@ class ProductVariantAdmin(admin.ModelAdmin):
         "created_at",
     )
     search_fields = (
-        "qr_code_number",
+        "barcode_number",
         "product__name",
         "product__company_name",
     )

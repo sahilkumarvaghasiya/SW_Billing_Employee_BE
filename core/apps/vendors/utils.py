@@ -24,7 +24,7 @@ def generate_1d_barcode_image(barcode_number):
         "text_distance": 4,
     }
 
-    file_name = f"qr_codes/{barcode_number}.png"
+    file_name = f"bar_codes/{barcode_number}.png"
     buffer = BytesIO()
     barcode.write(buffer, options=writer_options)
     content_file = ContentFile(buffer.getvalue())

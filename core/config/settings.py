@@ -50,6 +50,7 @@ INSTALLED_APPS = [
     'apps.products',
     'apps.shops',
     'apps.vendors',
+    'apps.sales'
 
 ]
 CORS_ALLOWED_ORIGINS = [
@@ -147,7 +148,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = "Asia/Kolkata"
 
 USE_I18N = True
 

@@ -102,7 +102,7 @@ class Product(models.Model):
         ]
 
     def __str__(self):
-        return self.name
+        return self.item_type.name if self.item_type else self.name
 
 
 class ProductVariant(models.Model):
@@ -117,13 +117,17 @@ class ProductVariant(models.Model):
         related_name="stock_variants",
     )
 
-    qr_code_number = models.CharField(max_length=100, unique=False, null=True, blank=True)
-    qr_code_image = models.ImageField(upload_to="qr_codes/", null=True, blank=True)
+    barcode_number = models.CharField(max_length=100, unique=False, null=True, blank=True)
+    barcode_image = models.ImageField(upload_to="bar_codes/", null=True, blank=True)
     size = models.ForeignKey(Size, on_delete=models.SET_NULL, null=True, blank=True)
     color = models.ForeignKey(Color, on_delete=models.SET_NULL, null=True, blank=True)
     original_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     price = models.DecimalField(max_digits=10, decimal_places=2)
-    discount_percent = models.FloatField(default=0)
+    discount_percent = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal("0.00")
+    )
     discount_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     quantity = models.PositiveIntegerField(default=0)
     low_stock_threshold = models.PositiveIntegerField(default=20)
@@ -137,19 +141,25 @@ class ProductVariant(models.Model):
             models.Index(fields=["product", "size", "color"]),
             models.Index(fields=["stock_entry"]),
             models.Index(fields=["price"]),
-            models.Index(fields=["qr_code_number"]),
+            models.Index(fields=["barcode_number"]),
         ]
 
+
     def final_price(self):
-        price = self.price
+        price = self.price or Decimal("0.00")
 
-        if self.discount_percent > 0:
-            return price - (price * Decimal(self.discount_percent) / Decimal(100))
+        discount_percent = self.discount_percent or Decimal("0.00")
+        discount_amount = self.discount_amount or Decimal("0.00")
 
-        if self.discount_amount > 0:
-            return price - self.discount_amount
+        if discount_percent > 0:
+            discount = price * discount_percent / Decimal("100")
+        else:
+            discount = discount_amount
 
-        return price
+        discount = min(discount, price)
+        final = price - discount
+
+        return max(final, Decimal("0.00"))
 
     def save(self, *args, **kwargs):
         if self.original_price is None:
