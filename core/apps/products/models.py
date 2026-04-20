@@ -131,6 +131,8 @@ class ProductVariant(models.Model):
     discount_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     quantity = models.PositiveIntegerField(default=0)
     low_stock_threshold = models.PositiveIntegerField(default=20)
+    low_stock_alert_sent_once = models.BooleanField(default=False)
+    out_of_stock_alert_sent_once = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

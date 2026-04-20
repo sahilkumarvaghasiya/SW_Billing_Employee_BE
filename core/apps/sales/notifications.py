@@ -1,6 +1,22 @@
+from datetime import timedelta
 from django.db import transaction
-
+from django.utils import timezone
 from apps.sales.models import Notification
+
+
+NOTIFICATION_AUTO_DELETE_HOURS = 24
+
+
+@transaction.atomic
+def purge_expired_notifications(shop_id=None):
+    cutoff = timezone.now() - timedelta(hours=NOTIFICATION_AUTO_DELETE_HOURS)
+    queryset = Notification.objects.filter(created_at__lt=cutoff)
+
+    if shop_id is not None:
+        queryset = queryset.filter(shop_id=shop_id)
+
+    deleted_count, _ = queryset.delete()
+    return deleted_count
 
 
 def _variant_descriptor(variant):
@@ -23,6 +39,12 @@ def _variant_descriptor(variant):
     return f"{product_name or 'Product'}{detail_text}"
 
 
+def _should_suppress_stock_alert(alert_already_sent):
+    if not alert_already_sent:
+        return False
+    return True
+
+
 @transaction.atomic
 def handle_stock_level_notification(variant):
     """Create/update stock notifications based on latest quantity.
@@ -32,6 +54,15 @@ def handle_stock_level_notification(variant):
     - quantity <= threshold => LOW_STOCK
     - quantity > threshold => resolve old stock alerts by marking as read
     """
+    variant_model = type(variant)
+    variant = (
+        variant_model.objects.select_related("product", "size", "color")
+        .select_for_update()
+        .get(pk=variant.pk)
+    )
+
+    purge_expired_notifications(shop_id=variant.product.shop_id)
+
     Notification.objects.filter(
         shop=variant.product.shop,
         product_variant=variant,
@@ -52,6 +83,16 @@ def handle_stock_level_notification(variant):
             type__in=[Notification.Type.LOW_STOCK, Notification.Type.OUT_OF_STOCK],
             is_read=False,
         ).update(is_read=True)
+
+        variant.low_stock_alert_sent_once = False
+        variant.out_of_stock_alert_sent_once = False
+        variant.save(
+            update_fields=[
+                "low_stock_alert_sent_once",
+                "out_of_stock_alert_sent_once",
+                "updated_at",
+            ]
+        )
         return None
 
     descriptor = _variant_descriptor(variant)
@@ -61,11 +102,13 @@ def handle_stock_level_notification(variant):
         title = "Out of stock"
         message = f"{descriptor} is out of stock."
         priority = Notification.Priority.HIGH
+        alert_already_sent = variant.out_of_stock_alert_sent_once
     else:
         notification_type = Notification.Type.LOW_STOCK
         title = "Low stock"
         message = f"{descriptor} is low in stock ({variant.quantity} left)."
         priority = Notification.Priority.MEDIUM
+        alert_already_sent = variant.low_stock_alert_sent_once
 
     unread_existing = Notification.objects.filter(
         shop=variant.product.shop,
@@ -77,7 +120,12 @@ def handle_stock_level_notification(variant):
     if unread_existing:
         return unread_existing
 
-    return Notification.objects.create(
+    if _should_suppress_stock_alert(
+        alert_already_sent=alert_already_sent,
+    ):
+        return None
+
+    notification = Notification.objects.create(
         shop=variant.product.shop,
         type=notification_type,
         title=title,
@@ -86,22 +134,52 @@ def handle_stock_level_notification(variant):
         product_variant=variant,
     )
 
+    if notification_type == Notification.Type.OUT_OF_STOCK:
+        variant.out_of_stock_alert_sent_once = True
+        variant.save(
+            update_fields=[
+                "out_of_stock_alert_sent_once",
+                "updated_at",
+            ]
+        )
+    else:
+        variant.low_stock_alert_sent_once = True
+        variant.save(
+            update_fields=[
+                "low_stock_alert_sent_once",
+                "updated_at",
+            ]
+        )
+
+    return notification
+
 
 @transaction.atomic
 def create_vendor_payment_due_notification(stock_entry):
+    purge_expired_notifications(shop_id=stock_entry.shop_id)
+
     if stock_entry.is_fully_paid:
         mark_vendor_payment_due_notification_resolved(stock_entry)
         return None, False
 
-    unread_existing = Notification.objects.filter(
+    today = timezone.localdate()
+    unread_existing_today = Notification.objects.filter(
         shop_id=stock_entry.shop_id,
         type=Notification.Type.VENDOR_PAYMENT_DUE,
         stock_entry=stock_entry,
         is_read=False,
+        created_at__date=today,
     ).first()
 
-    if unread_existing:
-        return unread_existing, False
+    if unread_existing_today:
+        return unread_existing_today, False
+
+    Notification.objects.filter(
+        shop_id=stock_entry.shop_id,
+        type=Notification.Type.VENDOR_PAYMENT_DUE,
+        stock_entry=stock_entry,
+        is_read=False,
+    ).update(is_read=True)
 
     due_text = stock_entry.due_date.strftime("%d %b %Y") if stock_entry.due_date else "N/A"
     due_amount = stock_entry.total_amount - stock_entry.paid_amount
