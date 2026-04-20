@@ -184,16 +184,9 @@ CELERY_TIMEZONE = TIME_ZONE
 
 VENDOR_DUE_ALERT_DAYS_BEFORE = int(os.getenv("VENDOR_DUE_ALERT_DAYS_BEFORE", "5"))
 
-# CELERY_BEAT_SCHEDULE = {
-#     "vendor-payment-due-alerts-every-morning": {
-#         "task": "apps.vendors.tasks.process_vendor_payment_due_alerts",
-#         "schedule": crontab(hour=8, minute=0),
-#     },
-# }
-
 CELERY_BEAT_SCHEDULE = {
-    "vendor-payment-due-alerts-every-minute": {
+    "vendor-payment-due-alerts-every-morning": {
         "task": "apps.vendors.tasks.process_vendor_payment_due_alerts",
-        "schedule": 30.0,  # every 60 seconds
+        "schedule": crontab(hour=8, minute=0), # every day at 8:00 AM
     },
 }
