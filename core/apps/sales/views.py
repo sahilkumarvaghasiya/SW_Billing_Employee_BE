@@ -335,19 +335,41 @@ class NotificationUnreadListViewSet(viewsets.ReadOnlyModelViewSet):
         purge_expired_notifications(shop_id=self.request.user.shop_id)
         return Notification.objects.filter(
             shop=self.request.user.shop,
-            is_read=False,
+            is_seen=False,
         ).order_by("-created_at")
 
     def list(self, request, *args, **kwargs):
-        unread_queryset = self.get_queryset()
-        unread_total = unread_queryset.count()
-        latest_unread = unread_queryset[:15]
+        unseen_queryset = self.get_queryset()
+        unseen_total = unseen_queryset.count()
+        all_unseen = unseen_queryset
 
-        serializer = self.get_serializer(latest_unread, many=True)
+        serializer = self.get_serializer(all_unseen, many=True)
         return Response(
             {
-                "total_unread": unread_total,
+                "total_unseen": unseen_total,
                 "notifications": serializer.data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class NotificationMarkSeenViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsEmployee]
+    http_method_names = ["post"]
+    queryset = Notification.objects.none()
+
+    def create(self, request, *args, **kwargs):
+        pending_queryset = Notification.objects.filter(
+            shop=request.user.shop,
+            is_seen=False,
+        )
+
+        updated = pending_queryset.update(is_seen=True)
+
+        return Response(
+            {
+                "message": "Notifications marked as seen.",
+                "updated_count": updated,
             },
             status=status.HTTP_200_OK,
         )

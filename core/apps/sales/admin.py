@@ -128,7 +128,7 @@ class NotificationAdmin(admin.ModelAdmin):
 		"shop",
 		"type",
 		"priority",
-		"is_read",
+		"is_seen",
 		"product_variant",
 		"stock_entry",
 		"created_at",
@@ -142,6 +142,6 @@ class NotificationAdmin(admin.ModelAdmin):
 		"shop",
 		"type",
 		"priority",
-		"is_read",
+		"is_seen",
 	)
 	ordering = ("-created_at",)

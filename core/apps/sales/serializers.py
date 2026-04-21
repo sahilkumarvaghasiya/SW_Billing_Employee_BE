@@ -309,7 +309,7 @@ class NotificationUnreadSerializer(serializers.ModelSerializer):
             "priority",
             "display_date",
             "display_time",
-            "is_read",
+            "is_seen",
         ]
 
     def get_display_date(self, obj):

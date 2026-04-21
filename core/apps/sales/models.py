@@ -199,7 +199,7 @@ class Notification(models.Model):
     title = models.CharField(max_length=120)
     message = models.TextField()
     priority = models.CharField(max_length=10, choices=Priority.choices, default=Priority.MEDIUM)
-    is_read = models.BooleanField(default=False, db_index=True)
+    is_seen = models.BooleanField(default=False, db_index=True)
     product_variant = models.ForeignKey(
         ProductVariant,
         on_delete=models.SET_NULL,
@@ -220,18 +220,18 @@ class Notification(models.Model):
     class Meta:
         ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=["shop", "is_read", "created_at"]),
-            models.Index(fields=["shop", "type", "is_read"]),
+            models.Index(fields=["shop", "is_seen", "created_at"]),
+            models.Index(fields=["shop", "type", "is_seen"]),
         ]
         constraints = [
             models.UniqueConstraint(
                 fields=["shop", "type", "product_variant"],
-                condition=models.Q(is_read=False),
+                condition=models.Q(is_seen=False),
                 name="uniq_unread_variant_notification_per_type",
             ),
             models.UniqueConstraint(
                 fields=["shop", "type", "stock_entry"],
-                condition=models.Q(is_read=False),
+                condition=models.Q(is_seen=False),
                 name="uniq_unread_stock_entry_notification_per_type",
             ),
         ]
