@@ -124,7 +124,7 @@ class Bill(models.Model):
             created_at__date=today
         ).count() + 1
 
-        return f"{self.shop.id}-{date_str}-{str(count).zfill(3)}"
+        return f"{date_str}-{str(count).zfill(3)-{self.shop.id}}"
 
     @staticmethod
     def _to_money(value):

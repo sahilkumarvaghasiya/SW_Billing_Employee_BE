@@ -1,11 +1,10 @@
 from decimal import Decimal
 from datetime import timedelta
-
 from django.utils import timezone
 from rest_framework import serializers
-
 from apps.products.models import ProductVariant
 from apps.sales.models import Bill, BillItem, Customer, Notification, PaymentConfig
+from apps.sales.utils import format_indian_amount
 
 
 class BarcodeLookupProductSerializer(serializers.ModelSerializer):
@@ -67,6 +66,7 @@ class SalesHistoryListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Bill
         fields = [
+            "id",
             "bill_number",
             "customer_name",
             "created_time",
@@ -107,23 +107,26 @@ class SalesHistoryItemDetailSerializer(serializers.ModelSerializer):
         return item_type.name if item_type else None
 
     def get_amount(self, obj):
-        return obj.price
+        return format_indian_amount(obj.price)
 
     def get_discount(self, obj):
         base_total = (obj.price or Decimal("0.00")) * (obj.quantity or 0)
         if (obj.discount_percent or Decimal("0.00")) > 0:
-            return (base_total * obj.discount_percent) / Decimal("100")
-        return obj.discount_amount or Decimal("0.00")
+            discount = (base_total * obj.discount_percent) / Decimal("100")
+            return format_indian_amount(discount)
+        return format_indian_amount(obj.discount_amount or Decimal("0.00"))
 
     def get_total_amount(self, obj):
-        return obj.total_price
+        return format_indian_amount(obj.total_price)
 
 
 class SalesHistoryDetailSerializer(serializers.ModelSerializer):
     customer_name = serializers.SerializerMethodField()
     phone_number = serializers.SerializerMethodField()
     created_time = serializers.SerializerMethodField()
+    subtotal = serializers.SerializerMethodField()
     discount_rs = serializers.SerializerMethodField()
+    total_amount = serializers.SerializerMethodField()
     items = SalesHistoryItemDetailSerializer(source="bill_items", many=True, read_only=True)
 
     class Meta:
@@ -150,10 +153,17 @@ class SalesHistoryDetailSerializer(serializers.ModelSerializer):
         local_time = timezone.localtime(obj.created_at)
         return local_time.strftime("%b %d, %Y, %I:%M %p")
 
+    def get_subtotal(self, obj):
+        return format_indian_amount(obj.subtotal)
+
     def get_discount_rs(self, obj):
         if (obj.discount_percent or Decimal("0.00")) > 0:
-            return (obj.subtotal or Decimal("0.00")) * obj.discount_percent / Decimal("100")
-        return obj.discount_amount or Decimal("0.00")
+            discount = (obj.subtotal or Decimal("0.00")) * obj.discount_percent / Decimal("100")
+            return format_indian_amount(discount)
+        return format_indian_amount(obj.discount_amount or Decimal("0.00"))
+
+    def get_total_amount(self, obj):
+        return format_indian_amount(obj.total_amount)
 
 
 class BillItemCreateSerializer(serializers.Serializer):
