@@ -3,7 +3,8 @@ from django.db.models.functions import Lower
 from datetime import timedelta
 from apps.shops.models import Shop
 from django.utils import timezone
-from django.db.models import Count
+import uuid
+
 
 class Vendor(models.Model):
     shop = models.ForeignKey(
@@ -26,7 +27,15 @@ class Vendor(models.Model):
             models.UniqueConstraint(
                 Lower("name"), "shop",
                 name="unique_vendor_per_shop"
-            )
+            ),
+            models.UniqueConstraint(
+                fields=["shop", "phone"],
+                name="unique_vendor_phone_per_shop"
+            ),
+            models.UniqueConstraint(
+                fields=["shop", "gst_number"],
+                name="unique_vendor_gst_per_shop"
+            ),
         ]
         indexes = [
             models.Index(fields=["shop"]),
@@ -93,7 +102,7 @@ class StockEntry(models.Model):
             created_at__date=today
         ).count() + 1
 
-        return f"INV-{self.shop.id}-{date_str}-{str(count).zfill(3)}"
+        return f"INV-{self.shop.id}-{date_str}-{uuid.uuid4().hex[:6].upper()}"
 
     def clean(self):
         if self.total_amount < 0 or self.paid_amount < 0:

@@ -45,7 +45,6 @@ def _should_suppress_stock_alert(alert_already_sent):
     return True
 
 
-@transaction.atomic
 def handle_stock_level_notification(variant):
     """Create/update stock notifications based on latest quantity.
 
@@ -55,11 +54,9 @@ def handle_stock_level_notification(variant):
     - quantity > threshold => resolve old stock alerts by marking as read
     """
     variant_model = type(variant)
-    variant = (
-        variant_model.objects.select_related("product", "size", "color")
-        .select_for_update()
-        .get(pk=variant.pk)
-    )
+
+    if not hasattr(variant, "product"):
+        variant = variant_model.objects.select_related("product", "size", "color").get(pk=variant.pk)
 
     purge_expired_notifications(shop_id=variant.product.shop_id)
 
@@ -154,7 +151,6 @@ def handle_stock_level_notification(variant):
     return notification
 
 
-@transaction.atomic
 def create_vendor_payment_due_notification(stock_entry):
     purge_expired_notifications(shop_id=stock_entry.shop_id)
 

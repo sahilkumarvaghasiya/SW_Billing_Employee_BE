@@ -6,6 +6,7 @@ from apps.products.views import (
     ProductVariantDetailView,
     ProductVariantListView,
     SizeDropdownListView,
+    BrandDropdownListView,
 )
 
 urlpatterns = [
@@ -14,4 +15,5 @@ urlpatterns = [
     path("sizes/list/", SizeDropdownListView.as_view({"get": "list"})),
     path("item-types/list/", ItemTypeDropdownListView.as_view({"get": "list"})),
     path("colors/list/", ColorDropdownListView.as_view({"get": "list"})),
+    path("brands/list/", BrandDropdownListView.as_view({"get": "list"})),
 ]

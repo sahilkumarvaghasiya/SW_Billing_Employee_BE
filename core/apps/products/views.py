@@ -1,13 +1,14 @@
 from rest_framework import viewsets
 from apps.accounts.permissions import IsEmployee
 from django_filters.rest_framework import DjangoFilterBackend
-from apps.products.models import Color, ItemType, ProductVariant, Size
+from apps.products.models import Color, ItemType, ProductVariant, Size, Company
 from apps.products.serializers import (
     ColorDropdownSerializer,
     ItemTypeDropdownSerializer,
     ProductVariantListSerializer,
     ProductVariantDetailSerializer,
     SizeDropdownSerializer,
+    BrandDropdownSerializer,
 )
 from apps.products.filters import ProductVariantFilter
 from apps.products.pagination import ProductPagination, DropdownPagination
@@ -91,6 +92,24 @@ class ColorDropdownListView(viewsets.ReadOnlyModelViewSet):
         search = (self.request.query_params.get("search") or "").strip()
 
         queryset = Color.objects.filter(shop=user.shop)
+
+        if search:
+            queryset = queryset.filter(name__icontains=search)
+
+        return queryset.order_by("-created_at")
+    
+
+class BrandDropdownListView(viewsets.ReadOnlyModelViewSet):
+    serializer_class = BrandDropdownSerializer
+    pagination_class = DropdownPagination
+    permission_classes = [IsEmployee]
+    http_method_names = ["get"]
+
+    def get_queryset(self):
+        user = self.request.user
+        search = (self.request.query_params.get("search") or "").strip()
+
+        queryset = Company.objects.filter(shop=user.shop)
 
         if search:
             queryset = queryset.filter(name__icontains=search)

@@ -49,6 +49,21 @@ class Size(NameMixin):
     def __str__(self):
         return self.name
 
+class Company(NameMixin):
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["name", "shop"],
+                name="unique_company_per_shop"
+            )
+        ]
+        indexes = [
+            models.Index(fields=["shop"]),
+        ]
+
+    def __str__(self):
+        return self.name
 
 class ItemType(NameMixin):
 

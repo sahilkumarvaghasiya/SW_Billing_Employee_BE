@@ -1,12 +1,12 @@
 from datetime import datetime
 from django.core.files.storage import default_storage
-from django.db import transaction
+from django.db import transaction, IntegrityError
 from django.db.models import Q
 from rest_framework import status, viewsets
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 from apps.accounts.permissions import IsEmployee
-from apps.products.models import Color, ItemType, Product, ProductVariant, Size
+from apps.products.models import Color, ItemType, Product, ProductVariant, Size, Company
 from apps.vendors.models import StockEntry, Vendor
 from apps.vendors.serializers import (
     GenerateBarcodeRequestSerializer,
@@ -21,52 +21,34 @@ from apps.vendors.utils import (
     normalize_gender,
     relative_media_path,
 )
+from django.core.exceptions import ValidationError
 
 
-def resolve_name_or_id(model_class, raw_value, shop):
-    """Resolve catalog entities from dropdown ID or free-text value.
-
-    Rules:
-    - Explicit dropdown IDs are resolved only when input is int or {'id': <int>}.
-    - Plain strings (including numeric strings like "23") are treated as text names.
-    - Text names are normalized to lowercase and resolved via get_or_create.
+def resolve_name_or_id(model_class, raw_value, shop, field_name="field"):
+    """
+    Supports:
+    - int → ID lookup
+    - string → value (create if not exists)
     """
 
     if isinstance(raw_value, bool):
-        raise ValueError("Invalid value.")
-
-    if isinstance(raw_value, dict):
-        if raw_value.get("id") not in (None, ""):
-            dropdown_id = raw_value.get("id")
-            try:
-                parsed_id = int(str(dropdown_id).strip())
-            except (TypeError, ValueError):
-                raise ValueError("Invalid dropdown id.")
-
-            obj = model_class.objects.filter(shop=shop, id=parsed_id).first()
-            if obj is not None:
-                return obj
-            raise ValueError("Selected dropdown item does not exist.")
-
-        raw_value = raw_value.get("text", raw_value.get("value", raw_value.get("name")))
+        raise ValidationError({field_name: "Invalid value."})
 
     if isinstance(raw_value, int):
-        obj = model_class.objects.filter(shop=shop, id=raw_value).first()
-        if obj is not None:
-            return obj
-        raise ValueError("Selected dropdown item does not exist.")
+        obj = model_class.objects.filter(id=raw_value, shop=shop).first()
+        if not obj:
+            raise ValidationError({field_name: "Selected item does not exist."})
+        return obj
 
-    value = "" if raw_value is None else str(raw_value).strip()
-
+    value = str(raw_value or "").strip()
     if not value:
-        raise ValueError("This field is required.")
+        raise ValidationError({field_name: "This field is required."})
 
     obj, _ = model_class.objects.get_or_create(
         shop=shop,
         name=value.lower(),
     )
     return obj
-
 
 class GenerateBarcodeViewSet(viewsets.ModelViewSet):
     queryset = StockEntry.objects.none()
@@ -90,54 +72,22 @@ class GenerateBarcodeViewSet(viewsets.ModelViewSet):
             status=status.HTTP_200_OK,
         )
 
-
 class VendorStockCreateViewSet(viewsets.ModelViewSet):
     queryset = StockEntry.objects.none()
     serializer_class = VendorStockCreateSerializer
     permission_classes = [IsEmployee]
     http_method_names = ["post"]
 
-
     @transaction.atomic
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
+        print("Received data:", request.data)  # Debugging line
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
 
         shop = request.user.shop
-        vendor_name = data["vendor_name"].strip().lower()
-        vendor_address = (data.get("vendor_address") or "").strip()
-        vendor_phone = (data.get("phone") or "").strip()
-        vendor_email = (data.get("email") or "").strip().lower() or None
-        vendor_gst_number = (data.get("gst_number") or "").strip()
 
-        duplicate_filter = Q(phone=vendor_phone) | Q(gst_number__iexact=vendor_gst_number)
-
-        existing_vendor = (
-            Vendor.objects.only("id")
-            .filter(shop=shop)
-            .filter(duplicate_filter)
-            .first()
-        )
-
-        if existing_vendor:
-            return Response(
-                {
-                    "message": "Vendor already exists"
-                    
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        vendor = Vendor.objects.create(
-            shop=shop,
-            name=vendor_name,
-            address=vendor_address,
-            phone=vendor_phone,
-            email=vendor_email,
-            gst_number=vendor_gst_number,
-            is_active=True,
-        )
+        vendor = self._get_or_create_vendor(shop, data)
 
         stock_entry = StockEntry.objects.create(
             shop=shop,
@@ -148,71 +98,9 @@ class VendorStockCreateViewSet(viewsets.ModelViewSet):
             notes=data.get("notes") or "",
         )
 
-        created_products = []
-
-        for product_data in data["products"]:
-            gender = normalize_gender(product_data["gender"])
-
-            try:
-                item_type = resolve_name_or_id(ItemType, product_data["product_type"], shop)
-            except ValueError:
-                return Response(
-                    {"message": ["product_type is required."]},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-            product = Product.objects.create(
-                shop=shop,
-                name=item_type.name,
-                company_name=product_data["company_name"],
-                gender=gender,
-                item_type=item_type,
-                is_active=True,
-            )
-
-            barcode_number = product_data["barcode_number"]
-            barcode_url = product_data.get("barcode_url")
-
-            if not barcode_url:
-                image_path = generate_1d_barcode_image(barcode_number)
-                barcode_url = request.build_absolute_uri(default_storage.url(image_path))
-                image_db_path = image_path
-            else:
-                image_db_path = relative_media_path(barcode_url)
-
-            for variant_data in product_data["item_variants"]:
-                try:
-                    size_obj = resolve_name_or_id(Size, variant_data["size"], shop)
-                    color_obj = resolve_name_or_id(Color, variant_data["colour"], shop)
-                except ValueError:
-                    return Response(
-                        {"message": ["size and colour are required for each variant."]},
-                        status=status.HTTP_400_BAD_REQUEST,
-                    )
-
-                ProductVariant.objects.create(
-                    product=product,
-                    stock_entry=stock_entry,
-                    barcode_number=barcode_number,
-                    barcode_image=image_db_path,
-                    size=size_obj,
-                    color=color_obj,
-                    original_price=variant_data["sellprice"],
-                    price=variant_data["sellprice"],
-                    quantity=variant_data["pieces"],
-                    is_active=True,
-                )
-
-            created_products.append(
-                {
-                    "company_name": product_data["company_name"],
-                    "product_type": product_data["product_type"],
-                    "gender": gender,
-                    "barcode_number": barcode_number,
-                    "barcode_url": barcode_url,
-                    "variant_count": len(product_data["item_variants"]),
-                }
-            )
+        products = self._create_products(
+            data["products"], shop, stock_entry, request
+        )
 
         return Response(
             {
@@ -223,11 +111,110 @@ class VendorStockCreateViewSet(viewsets.ModelViewSet):
                 "total_amount": str(stock_entry.total_amount),
                 "paid_amount": str(stock_entry.paid_amount),
                 "paymentdeadlinedate": str(stock_entry.due_date),
-                "products": created_products,
+                "products": products,
             },
             status=status.HTTP_201_CREATED,
         )
 
+    
+    def _get_or_create_vendor(self, shop, data):
+        vendor_name = data["vendor_name"].strip().lower()
+        vendor_phone = (data.get("phone") or "").strip()
+        vendor_email = (data.get("email") or "").strip().lower() or None
+        vendor_gst = (data.get("gst_number") or "").strip()
+        vendor_address = (data.get("vendor_address") or "").strip()
+
+        try:
+            vendor, created = Vendor.objects.get_or_create(
+                shop=shop,
+                name=vendor_name,
+                defaults={
+                    "phone": vendor_phone,
+                    "email": vendor_email,
+                    "gst_number": vendor_gst,
+                    "address": vendor_address,
+                    "is_active": True,
+                },
+            )
+
+            if not created:
+                raise ValidationError({"vendor": "Vendor already exists."})
+
+            return vendor
+
+        except IntegrityError:
+            raise ValidationError({"vendor": "Vendor already exists."})
+
+   
+    def _create_products(self, products, shop, stock_entry, request):
+        result = []
+
+        for product_data in products:
+            gender = normalize_gender(product_data["gender"])
+
+            item_type = resolve_name_or_id(
+                ItemType, product_data["product_type"], shop, "product_type"
+            )
+            company = resolve_name_or_id(
+                Company, product_data["company_name"], shop, "company_name"
+            )
+
+            product = Product.objects.create(
+                shop=shop,
+                name=item_type.name,
+                company_name=company,
+                gender=gender,
+                item_type=item_type,
+                is_active=True,
+            )
+
+            barcode_number = product_data["barcode_number"]
+            barcode_url = product_data.get("barcode_url")
+
+            if not barcode_url:
+                image_path = generate_1d_barcode_image(barcode_number)
+                barcode_url = request.build_absolute_uri(
+                    default_storage.url(image_path)
+                )
+                image_db_path = image_path
+            else:
+                image_db_path = relative_media_path(barcode_url)
+
+            variants_to_create = []
+
+            for variant in product_data["item_variants"]:
+                size = resolve_name_or_id(Size, variant["size"], shop, "size")
+                color = resolve_name_or_id(Color, variant["colour"], shop, "colour")
+
+                variants_to_create.append(
+                    ProductVariant(
+                        product=product,
+                        stock_entry=stock_entry,
+                        barcode_number=barcode_number,
+                        barcode_image=image_db_path,
+                        size=size,
+                        color=color,
+                        original_price=variant["sellprice"],
+                        price=variant["sellprice"],
+                        quantity=variant["pieces"],
+                        is_active=True,
+                    )
+                )
+
+            ProductVariant.objects.bulk_create(variants_to_create)
+
+            result.append(
+                {
+                    "company_name": product.company_name.name,
+                    "product_type": product.item_type.name,
+                    "gender": gender,
+                    "barcode_number": barcode_number,
+                    "barcode_url": barcode_url,
+                    "variant_count": len(variants_to_create),
+                }
+            )
+
+        return result
 
 class VendorExistingStockCreateViewSet(viewsets.ModelViewSet):
     queryset = StockEntry.objects.none()
@@ -241,15 +228,14 @@ class VendorExistingStockCreateViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
 
-        vendor_id = kwargs.get("id")
-        if vendor_id is None:
-            return Response(
-                {"message": ["Vendor is required."]},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
         shop = request.user.shop
+        vendor_id = kwargs.get("id")
+
+        if not vendor_id:
+            raise ValidationError({"vendor": "Vendor is required."})
+
         vendor = get_object_or_404(Vendor, id=vendor_id, shop=shop)
+
 
         stock_entry = StockEntry.objects.create(
             shop=shop,
@@ -260,22 +246,42 @@ class VendorExistingStockCreateViewSet(viewsets.ModelViewSet):
             notes=data.get("notes") or "",
         )
 
-        updated_products = []
+        products = self._create_products(
+            data["products"], shop, stock_entry, request
+        )
 
-        for product_data in data["products"]:
+        return Response(
+            {
+                "message": "Stock entry created for existing vendor.",
+                "vendor_id": vendor.id,
+                "stock_entry_id": stock_entry.id,
+                "invoice_number": stock_entry.invoice_number,
+                "status": stock_entry.status,
+                "total_amount": str(stock_entry.total_amount),
+                "paid_amount": str(stock_entry.paid_amount),
+                "paymentdeadlinedate": str(stock_entry.due_date),
+                "products": products,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+    def _create_products(self, products, shop, stock_entry, request):
+        result = []
+
+        for product_data in products:
             gender = normalize_gender(product_data["gender"])
-            try:
-                item_type = resolve_name_or_id(ItemType, product_data["product_type"], shop)
-            except ValueError:
-                return Response(
-                    {"message": ["product_type is required."]},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+
+            item_type = resolve_name_or_id(
+                ItemType, product_data["product_type"], shop, "product_type"
+            )
+            company = resolve_name_or_id(
+                Company, product_data["company_name"], shop, "company_name"
+            )
 
             product = Product.objects.create(
                 shop=shop,
                 name=item_type.name,
-                company_name=product_data["company_name"],
+                company_name=company,
                 gender=gender,
                 item_type=item_type,
                 is_active=True,
@@ -286,59 +292,48 @@ class VendorExistingStockCreateViewSet(viewsets.ModelViewSet):
 
             if not barcode_url:
                 image_path = generate_1d_barcode_image(barcode_number)
-                barcode_url = request.build_absolute_uri(default_storage.url(image_path))
+                barcode_url = request.build_absolute_uri(
+                    default_storage.url(image_path)
+                )
                 image_db_path = image_path
             else:
                 image_db_path = relative_media_path(barcode_url)
 
-            for variant_data in product_data["item_variants"]:
-                try:
-                    size_obj = resolve_name_or_id(Size, variant_data["size"], shop)
-                    color_obj = resolve_name_or_id(Color, variant_data["colour"], shop)
-                except ValueError:
-                    return Response(
-                        {"message": ["size and colour are required for each variant."]},
-                        status=status.HTTP_400_BAD_REQUEST,
-                    )
+            variants_to_create = []
 
-                ProductVariant.objects.create(
-                    product=product,
-                    stock_entry=stock_entry,
-                    barcode_number=barcode_number,
-                    barcode_image=image_db_path,
-                    size=size_obj,
-                    color=color_obj,
-                    original_price=variant_data["sellprice"],
-                    price=variant_data["sellprice"],
-                    quantity=variant_data["pieces"],
-                    is_active=True,
+            for variant in product_data["item_variants"]:
+                size = resolve_name_or_id(Size, variant["size"], shop, "size")
+                color = resolve_name_or_id(Color, variant["colour"], shop, "colour")
+
+                variants_to_create.append(
+                    ProductVariant(
+                        product=product,
+                        stock_entry=stock_entry,
+                        barcode_number=barcode_number,
+                        barcode_image=image_db_path,
+                        size=size,
+                        color=color,
+                        original_price=variant["sellprice"],
+                        price=variant["sellprice"],
+                        quantity=variant["pieces"],
+                        is_active=True,
+                    )
                 )
 
-            updated_products.append(
+            ProductVariant.objects.bulk_create(variants_to_create)
+
+            result.append(
                 {
-                    "company_name": product_data["company_name"],
-                    "product_type": product_data["product_type"],
+                    "company_name": product.company_name.name,
+                    "product_type": product.item_type.name,
                     "gender": gender,
                     "barcode_number": barcode_number,
                     "barcode_url": barcode_url,
-                    "variant_count": len(product_data["item_variants"]),
+                    "variant_count": len(variants_to_create),
                 }
             )
 
-        return Response(
-            {
-                "message": "New stock entry created for existing vendor.",
-                "vendor_id": vendor.id,
-                "stock_entry_id": stock_entry.id,
-                "invoice_number": stock_entry.invoice_number,
-                "status": stock_entry.status,
-                "total_amount": str(stock_entry.total_amount),
-                "paid_amount": str(stock_entry.paid_amount),
-                "paymentdeadlinedate": str(stock_entry.due_date),
-                "products": updated_products,
-            },
-            status=status.HTTP_200_OK,
-        )
+        return result
 
 
 class VendorListViewSet(viewsets.ReadOnlyModelViewSet):

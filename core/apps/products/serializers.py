@@ -1,6 +1,6 @@
 
 from rest_framework import serializers
-from apps.products.models import Color, ItemType, ProductVariant, Size
+from apps.products.models import Color, ItemType, ProductVariant, Size, Company
 
 
 class ProductVariantListSerializer(serializers.ModelSerializer):
@@ -68,4 +68,9 @@ class ItemTypeDropdownSerializer(serializers.ModelSerializer):
 class ColorDropdownSerializer(serializers.ModelSerializer):
     class Meta:
         model = Color
+        fields = ["id", "name", "created_at"]
+
+class BrandDropdownSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Company
         fields = ["id", "name", "created_at"]

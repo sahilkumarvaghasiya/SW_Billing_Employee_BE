@@ -1,6 +1,6 @@
 from decimal import Decimal
 from datetime import datetime
-from django.db import transaction
+from django.db import transaction, IntegrityError
 from django.utils import timezone
 from rest_framework import status
 from django.db.models import Q, Sum
@@ -209,6 +209,7 @@ class BillCreateViewSet(viewsets.ModelViewSet):
     @transaction.atomic
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
+        print(request.data,"request data")
         serializer.is_valid(raise_exception=True)
         validated_data = serializer.validated_data
 
@@ -257,15 +258,45 @@ class BillCreateViewSet(viewsets.ModelViewSet):
             is_active=True,
         )
 
-        bill.bill_number = bill.generate_bill_number()
-        bill.save()
+        for _ in range(3):
+            try:
+                bill.bill_number = bill.generate_bill_number()
+                bill.save()
+                break
+            except IntegrityError:
+                continue
+        else:
+            raise ValidationError("Failed to generate unique bill number")
+
+        prepared_items = validated_data["prepared_items"]
+
+        variant_ids = [item["variant"].pk for item in prepared_items]
+
+        variants_map = {
+            v.id: v
+            for v in ProductVariant.objects.select_for_update(of=("self",)).filter(id__in=variant_ids)
+        }
 
         bill_items = []
-        for item in validated_data["prepared_items"]:
+
+        for item in prepared_items:
+            variant = variants_map.get(item["variant"].pk)
+
+            if not variant:
+                raise ValidationError(f"Variant not found: {item['variant'].pk}")
+
+            if variant.quantity < item["quantity"]:
+                raise ValidationError(f"Insufficient stock for variant {variant.id}")
+
+            variant.quantity -= item["quantity"]
+            variant.save(update_fields=["quantity", "updated_at"])
+
+            handle_stock_level_notification(variant)
+
             bill_items.append(
                 BillItem(
                     bill=bill,
-                    product_variant=item["variant"],
+                    product_variant=variant,
                     quantity=item["quantity"],
                     price=item["price"],
                     discount_percent=item["discount_percent"],
@@ -273,10 +304,6 @@ class BillCreateViewSet(viewsets.ModelViewSet):
                     total_price=item["total_price"],
                 )
             )
-
-            item["variant"].quantity -= item["quantity"]
-            item["variant"].save(update_fields=["quantity", "updated_at"])
-            handle_stock_level_notification(item["variant"])
 
         BillItem.objects.bulk_create(bill_items)
 
@@ -324,7 +351,6 @@ class BillCreateViewSet(viewsets.ModelViewSet):
             },
             status=status.HTTP_201_CREATED,
         )
-
 
 class NotificationUnreadListViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = NotificationUnreadSerializer

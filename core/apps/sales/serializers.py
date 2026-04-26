@@ -191,7 +191,7 @@ class BillCreateSerializer(serializers.Serializer):
     payment_method = serializers.ChoiceField(choices=Bill.PaymentMethod.choices)
     payment_status = serializers.ChoiceField(choices=Bill.PaymentStatus.choices, required=False, default=Bill.PaymentStatus.PAID)
     selected_payment_config_id = serializers.UUIDField(required=False, allow_null=True)
-    notes = serializers.CharField(required=False, allow_blank=True)
+    notes = serializers.CharField(required=False, allow_blank=True, allow_null=True)
 
     def validate(self, attrs):
         request = self.context["request"]
