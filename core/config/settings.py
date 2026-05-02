@@ -33,7 +33,7 @@ load_dotenv(BASE_DIR / ".env")
 # SECURITY WARNING: keep the secret key used in production secret!
 
 
-SECRET_KEY = os.environ.get("SECRET_KEY")
+SECRET_KEY = os.environ.get("SECRET_KEY", "django-insecure-cjyg1qj)*@uhuw$%vnn7h97wd%5stjntm3#)41!tym2v-t#y(c")
 if not SECRET_KEY:
     raise Exception("SECRET_KEY is missing from environment variables")
 
