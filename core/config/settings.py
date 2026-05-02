@@ -41,7 +41,7 @@ if not SECRET_KEY:
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv("DEBUG", "False").lower() == "true"
 
-# ALLOWED_HOSTS = ["127.0.0.1", "localhost", "10.0.2.2", "*", "c847-2401-4900-790b-280b-9c9-b8d3-c460-a709.ngrok-free.app", "your-app.up.railway.app"]
+# ALLOWED_HOSTS = ["127.0.0.1", "localhost", "10.0.2.2", "*", "c847-2401-4900-790b-280b-9c9-b8d3-c460-a709.ngrok-free.app", "swbillingemployeebe-production.up.railway.app"]
 ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "").split(",")
 # Application definition
 
@@ -124,12 +124,9 @@ WSGI_APPLICATION = 'core.config.wsgi.application'
 # }
 
 
+
 DATABASES = {
-    "default": dj_database_url.parse(
-        os.getenv("DATABASE_URL"),
-        conn_max_age=600,
-        ssl_require=False
-    )
+    "default": dj_database_url.config(conn_max_age=600)
 }
 MEDIA_URL = "/media/"
 MEDIA_ROOT = os.path.join(BASE_DIR, "media")
