@@ -1,1 +1,1 @@
-web: gunicorn SW_BILLING_EMPLOYEE_BE.wsgi:application
+web: gunicorn config.wsgi:application
