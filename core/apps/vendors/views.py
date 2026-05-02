@@ -22,7 +22,7 @@ from apps.vendors.utils import (
     relative_media_path,
 )
 from django.core.exceptions import ValidationError
-
+from apps.sales.utils import format_indian_amount
 
 def resolve_name_or_id(model_class, raw_value, shop, field_name="field"):
     """
@@ -81,7 +81,6 @@ class VendorStockCreateViewSet(viewsets.ModelViewSet):
     @transaction.atomic
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
-        print("Received data:", request.data)  # Debugging line
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
 
@@ -427,9 +426,9 @@ class VendorStockHistoryListViewset(viewsets.ReadOnlyModelViewSet):
                 "id": entry.id,
                 "invoice_number": entry.invoice_number,
                 "created_date": entry.created_at.strftime("%d-%m-%Y"),
-                "total_amount": str(entry.total_amount),
-                "paid_amount": str(entry.paid_amount),
-                "pending_amount": str(max(entry.total_amount - entry.paid_amount, 0)),
+                "total_amount": format_indian_amount(entry.total_amount),
+                "paid_amount": format_indian_amount(entry.paid_amount),
+                "pending_amount": format_indian_amount(max(entry.total_amount - entry.paid_amount, 0)),
                 "status": entry.status,
             }
             for entry in entries
@@ -492,9 +491,11 @@ class VendorStockHistoryDetailsViewset(viewsets.ReadOnlyModelViewSet):
             "invoice_number": stock_entry.invoice_number,
             "created_date": stock_entry.created_at.strftime("%d-%m-%Y"),
             "vendor_name": stock_entry.vendor.name,
-            "total_amount": str(stock_entry.total_amount),
-            "paid_amount": str(stock_entry.paid_amount),
-            "pending_amount": str(max(stock_entry.total_amount - stock_entry.paid_amount, 0)),
+            "total_amount": format_indian_amount(stock_entry.total_amount),
+            "paid_amount": format_indian_amount(stock_entry.paid_amount),
+            "pending_amount": format_indian_amount(
+                max(stock_entry.total_amount - stock_entry.paid_amount, 0)
+            ),
             "payment_deadline": stock_entry.due_date.strftime("%d-%m-%Y") if stock_entry.due_date else None,
             "status": stock_entry.status,
             "products": list(products.values()),

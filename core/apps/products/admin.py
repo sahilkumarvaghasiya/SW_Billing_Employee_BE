@@ -1,7 +1,27 @@
 from django.contrib import admin
-from apps.products.models import Product, ProductVariant, Size
+from apps.products.models import Product, ProductVariant, Size, Company, ItemType, Color
 
 
+@admin.register(Company)
+class CompanyAdmin(admin.ModelAdmin):
+    list_display = ("id", "name", "shop", "created_at")
+    search_fields = ("name",)
+    list_filter = ("shop",)
+    ordering = ("name",)
+
+@admin.register(ItemType)
+class ItemTypeAdmin(admin.ModelAdmin):
+    list_display = ("id", "name", "shop", "created_at")
+    search_fields = ("name",)
+    list_filter = ("shop",)
+    ordering = ("name",)
+
+@admin.register(Color)
+class ColorAdmin(admin.ModelAdmin):
+    list_display = ("id", "name", "shop", "created_at")
+    search_fields = ("name",)
+    list_filter = ("shop",)
+    ordering = ("name",)
 @admin.register(Size)
 class SizeAdmin(admin.ModelAdmin):
     list_display = ("id", "name", "shop", "created_at")
