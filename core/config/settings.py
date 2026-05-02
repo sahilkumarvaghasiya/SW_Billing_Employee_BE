@@ -41,7 +41,7 @@ if not SECRET_KEY:
 DEBUG = os.getenv("DEBUG", "False").lower() == "true"
 
 # ALLOWED_HOSTS = ["127.0.0.1", "localhost", "10.0.2.2", "*", "c847-2401-4900-790b-280b-9c9-b8d3-c460-a709.ngrok-free.app", "your-app.up.railway.app"]
-ALLOWED_HOSTS = ["*"]
+ALLOWED_HOSTS = ["swbillingemployeebe-production.up.railway.app"]
 # Application definition
 
 INSTALLED_APPS = [
