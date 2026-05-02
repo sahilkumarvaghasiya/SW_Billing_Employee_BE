@@ -33,7 +33,7 @@ load_dotenv(BASE_DIR / ".env")
 # SECURITY WARNING: keep the secret key used in production secret!
 
 
-SECRET_KEY = os.environ.get("SECRET_KEY", "django-insecure-cjyg1qj)*@uhuw$%vnn7h97wd%5stjntm3#)41!tym2v-t#y(c")
+SECRET_KEY = os.environ.get("SECRET_KEY")
 if not SECRET_KEY:
     raise Exception("SECRET_KEY is missing from environment variables")
 
@@ -41,7 +41,7 @@ if not SECRET_KEY:
 DEBUG = os.getenv("DEBUG", "False").lower() == "true"
 
 # ALLOWED_HOSTS = ["127.0.0.1", "localhost", "10.0.2.2", "*", "c847-2401-4900-790b-280b-9c9-b8d3-c460-a709.ngrok-free.app", "your-app.up.railway.app"]
-ALLOWED_HOSTS = ["swbillingemployeebe-production.up.railway.app"]
+ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "").split(",")
 # Application definition
 
 INSTALLED_APPS = [
