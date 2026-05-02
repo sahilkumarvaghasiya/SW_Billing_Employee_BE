@@ -14,6 +14,7 @@ from pathlib import Path
 from datetime import timedelta
 from celery.schedules import crontab
 import sys
+import dj_database_url
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
@@ -122,15 +123,13 @@ WSGI_APPLICATION = 'core.config.wsgi.application'
 #     }
 # }
 
+
 DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.getenv("DB_NAME") or os.getenv("PGDATABASE"),
-        "USER": os.getenv("DB_USER") or os.getenv("PGUSER"),
-        "PASSWORD": os.getenv("DB_PASSWORD") or os.getenv("PGPASSWORD"),
-        "HOST": os.getenv("DB_HOST") or os.getenv("PGHOST"),
-        "PORT": os.getenv("DB_PORT") or os.getenv("PGPORT"),
-    }
+    "default": dj_database_url.parse(
+        os.getenv("DATABASE_URL"),
+        conn_max_age=600,
+        ssl_require=False
+    )
 }
 MEDIA_URL = "/media/"
 MEDIA_ROOT = os.path.join(BASE_DIR, "media")

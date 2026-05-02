@@ -6,6 +6,7 @@ click==8.3.2
 click-didyoumean==0.3.1
 click-plugins==1.1.1.2
 click-repl==0.3.0
+dj-database-url==3.1.2
 Django==6.0.3
 django-cors-headers==4.9.0
 django-filter==25.2
@@ -28,6 +29,4 @@ sqlparse==0.5.5
 tzdata==2026.1
 vine==5.1.0
 wcwidth==0.6.0
-whitenoise==6.4.0
-gunicorn==20.1.0
-setuptools==79.0.1
+whitenoise==6.12.0
