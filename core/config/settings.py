@@ -38,8 +38,8 @@ SECRET_KEY = os.getenv("SECRET_KEY")
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv("DEBUG", "False").lower() == "true"
 
-ALLOWED_HOSTS = ["127.0.0.1", "localhost", "10.0.2.2", "*", "c847-2401-4900-790b-280b-9c9-b8d3-c460-a709.ngrok-free.app"]
-
+# ALLOWED_HOSTS = ["127.0.0.1", "localhost", "10.0.2.2", "*", "c847-2401-4900-790b-280b-9c9-b8d3-c460-a709.ngrok-free.app", "your-app.up.railway.app"]
+ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS")
 # Application definition
 
 INSTALLED_APPS = [
@@ -76,6 +76,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
 ]
 
 CORS_ALLOW_ALL_ORIGINS = os.getenv("CORS_ALLOW_ALL_ORIGINS", "False").lower() == "true"
@@ -122,11 +123,11 @@ WSGI_APPLICATION = 'core.config.wsgi.application'
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.getenv("DB_NAME"),
-        "USER": os.getenv("DB_USER"),
-        "PASSWORD": os.getenv("DB_PASSWORD"),
-        "HOST": os.getenv("DB_HOST"),
-        "PORT": os.getenv("DB_PORT"),
+        "NAME": os.getenv("DB_NAME") or os.getenv("PGDATABASE"),
+        "USER": os.getenv("DB_USER") or os.getenv("PGUSER"),
+        "PASSWORD": os.getenv("DB_PASSWORD") or os.getenv("PGPASSWORD"),
+        "HOST": os.getenv("DB_HOST") or os.getenv("PGHOST"),
+        "PORT": os.getenv("DB_PORT") or os.getenv("PGPORT"),
     }
 }
 MEDIA_URL = "/media/"
@@ -166,6 +167,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / "staticfiles"
 
 AUTH_USER_MODEL = "accounts.User"
 
