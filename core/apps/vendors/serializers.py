@@ -59,7 +59,7 @@ class BarcodeItemVariantSerializer(serializers.Serializer):
 
 
 class GenerateBarcodeRequestSerializer(serializers.Serializer):
-    company_name = serializers.CharField(max_length=255)
+    company_name = LookupValueField()
     product_type = LookupValueField()
     gender = serializers.ChoiceField(choices=["boy", "girl", "men", "women"])
     item_variants = BarcodeItemVariantSerializer(many=True)
@@ -78,7 +78,7 @@ class StockProductVariantSerializer(serializers.Serializer):
 
 
 class StockProductSerializer(serializers.Serializer):
-    company_name = serializers.CharField(max_length=255)
+    company_name = LookupValueField()
     product_type = LookupValueField()
     gender = serializers.ChoiceField(choices=["boy", "girl", "men", "women"])
     barcode_number = serializers.CharField(max_length=100)

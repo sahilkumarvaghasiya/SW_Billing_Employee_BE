@@ -8,6 +8,7 @@ class ProductVariantFilter(django_filters.FilterSet):
 
     search = django_filters.CharFilter(method="filter_search")
     size_id = django_filters.NumberFilter(field_name="size__id")
+    color_id = django_filters.NumberFilter(field_name="color__id")
     gender = django_filters.CharFilter(method="filter_gender")
     min_price = django_filters.NumberFilter(field_name="price", lookup_expr="gte")
     max_price = django_filters.NumberFilter(field_name="price", lookup_expr="lte")
@@ -24,7 +25,7 @@ class ProductVariantFilter(django_filters.FilterSet):
         return queryset.filter(
             Q(product__item_type__name__icontains=value) |
             Q(product__name__icontains=value) |
-            Q(product__company_name__icontains=value)
+            Q(product__company__name__icontains=value)
         )
 
     def filter_gender(self, queryset, name, value):

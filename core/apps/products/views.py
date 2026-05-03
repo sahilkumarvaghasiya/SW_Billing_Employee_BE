@@ -24,7 +24,7 @@ class ProductVariantListView(viewsets.ReadOnlyModelViewSet):
         user = self.request.user
 
         return ProductVariant.objects.select_related(
-            "product", "size"
+            "product", "size", "color", "product__item_type", "product__company"
         ).filter(
             product__shop=user.shop,  
             is_active=True

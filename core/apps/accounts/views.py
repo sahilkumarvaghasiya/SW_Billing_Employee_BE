@@ -37,11 +37,26 @@ class LoginView(APIView):
         return Response({
             "access": str(refresh.access_token),
             "refresh": str(refresh),
+            # "user_id": user.id,
+            # "user_name": user.username,
+            # "shop_name": user.shop.name if user.shop else None,
+            # "role": user.role
+        })
+    
+
+class UserDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        return Response({
             "user_id": user.id,
             "user_name": user.username,
+            "email": user.email,
             "shop_name": user.shop.name if user.shop else None,
             "role": user.role
         })
+
 
 class CreateEmployeeView(APIView):
 

@@ -161,7 +161,7 @@ class VendorStockCreateViewSet(viewsets.ModelViewSet):
             product = Product.objects.create(
                 shop=shop,
                 name=item_type.name,
-                company_name=company,
+                company=company,
                 gender=gender,
                 item_type=item_type,
                 is_active=True,
@@ -204,7 +204,7 @@ class VendorStockCreateViewSet(viewsets.ModelViewSet):
 
             result.append(
                 {
-                    "company_name": product.company_name.name,
+                    "company_name": product.company.name,
                     "product_type": product.item_type.name,
                     "gender": gender,
                     "barcode_number": barcode_number,
@@ -280,7 +280,7 @@ class VendorExistingStockCreateViewSet(viewsets.ModelViewSet):
             product = Product.objects.create(
                 shop=shop,
                 name=item_type.name,
-                company_name=company,
+                company=company,
                 gender=gender,
                 item_type=item_type,
                 is_active=True,
@@ -323,7 +323,7 @@ class VendorExistingStockCreateViewSet(viewsets.ModelViewSet):
 
             result.append(
                 {
-                    "company_name": product.company_name.name,
+                    "company_name": product.company.name,
                     "product_type": product.item_type.name,
                     "gender": gender,
                     "barcode_number": barcode_number,
@@ -473,7 +473,7 @@ class VendorStockHistoryDetailsViewset(viewsets.ReadOnlyModelViewSet):
             if pid not in products:
                 products[pid] = {
                     "product_name": p.item_type.name if p.item_type else p.name,
-                    "company_name": p.company_name,
+                    "company_name": p.company.name if p.company else None,
                     "gender": p.gender,
                     "variants": [],
                 }

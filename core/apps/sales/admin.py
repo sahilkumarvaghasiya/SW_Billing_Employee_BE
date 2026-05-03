@@ -112,7 +112,7 @@ class BillItemAdmin(admin.ModelAdmin):
 		"bill__bill_number",
 		"product_variant__barcode_number",
 		"product_variant__product__name",
-		"product_variant__product__company_name",
+		"product_variant__product__company__name",
 	)
 	list_filter = (
 		"bill__shop",

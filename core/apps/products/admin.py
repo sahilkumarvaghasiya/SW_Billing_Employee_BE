@@ -35,13 +35,13 @@ class ProductAdmin(admin.ModelAdmin):
     list_display = (
         "id",
         "name",
-        "company_name",
+        "company",
         "shop",
         "gender",
         "is_active",
         "created_at",
     )
-    search_fields = ("name", "company_name")
+    search_fields = ("name", "company")
     list_filter = ("shop", "gender", "is_active")
     ordering = ("-created_at",)
 
@@ -64,7 +64,7 @@ class ProductVariantAdmin(admin.ModelAdmin):
     search_fields = (
         "barcode_number",
         "product__name",
-        "product__company_name",
+        "product__company__name",
     )
     list_filter = (
         "product__shop",

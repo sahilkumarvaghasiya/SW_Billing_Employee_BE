@@ -92,7 +92,12 @@ class Product(models.Model):
 
     shop = models.ForeignKey(Shop, on_delete=models.CASCADE, related_name="products")
     name = models.CharField(max_length=255)
-    company_name = models.CharField(max_length=255, blank=True, null=True)
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True
+    )
     gender = models.CharField(max_length=10, choices=GenderChoices.choices)
     item_type = models.ForeignKey(
         ItemType,
@@ -110,14 +115,14 @@ class Product(models.Model):
         indexes = [
             models.Index(fields=["shop"]),
             models.Index(fields=["shop", "created_at"]),
-            models.Index(fields=["name", "company_name"]),
+            models.Index(fields=["company"]),
             models.Index(fields=["gender"]),
             models.Index(fields=["item_type"]),
             models.Index(fields=["is_active"]),
         ]
 
     def __str__(self):
-        return self.item_type.name if self.item_type else self.name
+            return f"{self.name} ({self.item_type.name})" if self.item_type else self.name
 
 
 class ProductVariant(models.Model):
