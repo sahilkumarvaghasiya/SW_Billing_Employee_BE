@@ -1,15 +1,16 @@
 from datetime import timedelta
+from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 from apps.sales.models import Notification
 
 
-NOTIFICATION_AUTO_DELETE_HOURS = 24
-
-
+NOTIFICATION_AUTO_DELETE_AFTER = getattr(
+    settings, 'NOTIFICATION_AUTO_DELETE_AFTER_HOURS', None
+)
 @transaction.atomic
 def purge_expired_notifications(shop_id=None):
-    cutoff = timezone.now() - timedelta(hours=NOTIFICATION_AUTO_DELETE_HOURS)
+    cutoff = timezone.now() - timedelta(hours=NOTIFICATION_AUTO_DELETE_AFTER)
     queryset = Notification.objects.filter(is_seen=True, created_at__lt=cutoff)
 
     if shop_id is not None:

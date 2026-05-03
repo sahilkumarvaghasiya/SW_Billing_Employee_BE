@@ -187,6 +187,10 @@ CELERY_TIMEZONE = TIME_ZONE
 
 VENDOR_DUE_ALERT_DAYS_BEFORE = int(os.getenv("VENDOR_DUE_ALERT_DAYS_BEFORE", "5"))
 
+NOTIFICATION_AUTO_DELETE_AFTER_HOURS = int(os.getenv("NOTIFICATION_AUTO_DELETE_AFTER_HOURS", "24"))
+
+
+
 CELERY_BEAT_SCHEDULE = {
     "vendor-payment-due-alerts-every-morning": {
         "task": "apps.vendors.tasks.process_vendor_payment_due_alerts",

@@ -1,5 +1,7 @@
 from decimal import Decimal
+from datetime import timedelta
 from datetime import datetime
+from django.conf import settings
 from django.db import transaction, IntegrityError
 from django.utils import timezone
 from rest_framework import status
@@ -9,7 +11,10 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from apps.accounts.permissions import IsEmployee
 from apps.products.models import ProductVariant
-from apps.sales.notifications import handle_stock_level_notification, purge_expired_notifications
+from apps.sales.notifications import (
+    handle_stock_level_notification,
+    purge_expired_notifications,
+)
 from apps.sales.pagination import SalesBarcodeLookupPagination, SalesHistoryPagination
 from apps.sales.models import Bill, BillItem, Customer, Notification, PaymentConfig
 from apps.sales.serializers import (
@@ -357,19 +362,25 @@ class NotificationUnreadListViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [IsEmployee]
     http_method_names = ["get"]
 
+    NOTIFICATION_AUTO_DELETE_AFTER = getattr(settings, 'NOTIFICATION_AUTO_DELETE_AFTER_HOURS', None)
+
     def get_queryset(self):
         purge_expired_notifications(shop_id=self.request.user.shop_id)
-        return Notification.objects.filter(
-            shop=self.request.user.shop,
-            is_seen=False,
-        ).order_by("-created_at")
+        cutoff = timezone.now() - timedelta(hours=self.NOTIFICATION_AUTO_DELETE_AFTER)
+        return (
+            Notification.objects.filter(shop=self.request.user.shop)
+            .filter(Q(is_seen=False) | Q(created_at__gte=cutoff))
+            .order_by("-created_at")
+        )
 
     def list(self, request, *args, **kwargs):
-        unseen_queryset = self.get_queryset()
-        unseen_total = unseen_queryset.count()
-        all_unseen = unseen_queryset
+        queryset = self.filter_queryset(self.get_queryset())
+        unseen_total = Notification.objects.filter(
+            shop=request.user.shop,
+            is_seen=False,
+        ).count()
 
-        serializer = self.get_serializer(all_unseen, many=True)
+        serializer = self.get_serializer(queryset, many=True)
         return Response(
             {
                 "total_unseen": unseen_total,
