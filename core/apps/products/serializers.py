@@ -8,6 +8,7 @@ class ProductVariantListSerializer(serializers.ModelSerializer):
     company_name = serializers.SerializerMethodField()
     size = serializers.SerializerMethodField()
     color = serializers.SerializerMethodField()
+    gender = serializers.SerializerMethodField()
     final_price = serializers.SerializerMethodField()
 
     class Meta:
@@ -18,8 +19,12 @@ class ProductVariantListSerializer(serializers.ModelSerializer):
             "company_name",
             "size",
             "color",
+            "gender",
             "final_price",
         ]
+
+    def get_gender(self, obj):
+        return getattr(obj.product, "gender", None)
 
     def get_product_name(self, obj):
         return getattr(obj.product, "name", None)

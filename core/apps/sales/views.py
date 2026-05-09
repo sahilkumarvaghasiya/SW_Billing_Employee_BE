@@ -28,7 +28,6 @@ from apps.sales.serializers import (
 )
 from apps.sales.utils import format_indian_amount
 
-
 class BarcodeProductLookupListView(viewsets.ReadOnlyModelViewSet):
     serializer_class = BarcodeLookupProductSerializer
     permission_classes = [IsEmployee]
@@ -36,30 +35,59 @@ class BarcodeProductLookupListView(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         barcode_number = (self.kwargs.get("barcode_number") or "").strip()
+
         if not barcode_number:
-            raise ValidationError({"barcode_number": ["Barcode is required."]})
+            raise ValidationError({
+                "barcode_number": ["Barcode is required."]
+            })
 
         search = (self.request.query_params.get("search") or "").strip()
 
+        scanned_barcodes = (
+            self.request.query_params.get("scanned_barcodes") or ""
+        )
+
+        scanned_barcodes_list = [
+            barcode.strip()
+            for barcode in scanned_barcodes.split(",")
+            if barcode.strip()
+        ]
+
         barcode_queryset = ProductVariant.objects.select_related(
-            "product", "size", "color", "product__item_type"
+            "product",
+            "size",
+            "color",
+            "product__item_type",
+            "product__company",
         ).filter(
             product__shop=self.request.user.shop,
             is_active=True,
             barcode_number=barcode_number,
-        ).order_by("id")
+        )
 
-        self.request._is_multiple = barcode_queryset.count() > 1
+        total_count = barcode_queryset.count()
 
-        if search:
+        self.request._is_multiple = total_count > 1
+
+        if (
+            total_count == 1
+            and barcode_number in scanned_barcodes_list
+        ):
+            raise ValidationError({
+                "quantity": [
+                    "Already scanned. Please increase quantity."
+                ]
+            })
+
+        if search and total_count > 1:
             barcode_queryset = barcode_queryset.filter(
                 Q(product__name__icontains=search)
-                | Q(product__company_name__icontains=search)
+                | Q(product__company__name__icontains=search)
                 | Q(product__item_type__name__icontains=search)
             )
 
         return barcode_queryset.order_by("-created_at")
-
+    
 
 class CustomerLookupByPhoneViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = CustomerLookupSerializer

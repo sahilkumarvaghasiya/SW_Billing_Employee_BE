@@ -11,6 +11,7 @@ class BarcodeLookupProductSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source="product.item_type.name")
     size = serializers.SerializerMethodField()
     final_price = serializers.SerializerMethodField()
+    quantity = serializers.IntegerField()
 
     class Meta:
         model = ProductVariant
@@ -19,6 +20,7 @@ class BarcodeLookupProductSerializer(serializers.ModelSerializer):
             "product_name",
             "size",
             "final_price",
+            "quantity",
         ]
 
     def get_size(self, obj):
