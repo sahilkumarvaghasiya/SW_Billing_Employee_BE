@@ -86,7 +86,7 @@ CORS_ALLOW_ALL_ORIGINS = os.getenv("CORS_ALLOW_ALL_ORIGINS", "False").lower() ==
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
+        "apps.accounts.authentication.SingleDeviceJWTAuthentication",
     ),
     "DEFAULT_PERMISSION_CLASSES": (
         "rest_framework.permissions.IsAuthenticated",
@@ -178,6 +178,10 @@ SIMPLE_JWT = {
     "ROTATE_REFRESH_TOKENS": True,                  # new refresh every time
     "BLACKLIST_AFTER_ROTATION": True,               # old refresh invalid
     "AUTH_HEADER_TYPES": ("Bearer",),
+
+    "TOKEN_OBTAIN_SERIALIZER": (
+        "apps.accounts.jwt.CustomTokenObtainPairSerializer"
+    ),
 }
 
 
@@ -186,10 +190,9 @@ CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", CELERY_BROKER_URL)
 CELERY_TIMEZONE = TIME_ZONE
 
 VENDOR_DUE_ALERT_DAYS_BEFORE = int(os.getenv("VENDOR_DUE_ALERT_DAYS_BEFORE", "5"))
-
-NOTIFICATION_AUTO_DELETE_AFTER_HOURS = int(os.getenv("NOTIFICATION_AUTO_DELETE_AFTER_HOURS", "24"))
-
-
+NOTIFICATION_AUTO_DELETE_AFTER_HOURS = int(os.getenv("NOTIFICATION_AUTO_DELETE_AFTER_HOURS", "48"))
+LOW_STOCK_THRESHOLD = int(os.getenv("LOW_STOCK_THRESHOLD", 20))
+LOW_STOCK_PRE_ALERT_BUFFER = int(os.getenv("LOW_STOCK_PRE_ALERT_BUFFER", 10))
 
 CELERY_BEAT_SCHEDULE = {
     "vendor-payment-due-alerts-every-morning": {

@@ -185,6 +185,7 @@ class BillItem(models.Model):
 
 class Notification(models.Model):
     class Type(models.TextChoices):
+        PRE_LOW_STOCK = "PRE_LOW_STOCK", "Low Stock Warning"
         LOW_STOCK = "LOW_STOCK", "Low stock"
         OUT_OF_STOCK = "OUT_OF_STOCK", "Out of stock"
         VENDOR_PAYMENT_DUE = "VENDOR_PAYMENT_DUE", "Vendor payment due"

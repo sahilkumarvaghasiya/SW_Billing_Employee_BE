@@ -390,7 +390,7 @@ class NotificationUnreadListViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [IsEmployee]
     http_method_names = ["get"]
 
-    NOTIFICATION_AUTO_DELETE_AFTER = getattr(settings, 'NOTIFICATION_AUTO_DELETE_AFTER_HOURS', None)
+    NOTIFICATION_AUTO_DELETE_AFTER = getattr(settings, 'NOTIFICATION_AUTO_DELETE_AFTER_HOURS', 48)
 
     def get_queryset(self):
         purge_expired_notifications(shop_id=self.request.user.shop_id)

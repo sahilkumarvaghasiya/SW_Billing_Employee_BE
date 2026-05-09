@@ -310,12 +310,17 @@ class BillCreateSerializer(serializers.Serializer):
 class NotificationUnreadSerializer(serializers.ModelSerializer):
     display_date = serializers.SerializerMethodField()
     display_time = serializers.SerializerMethodField()
+    type_display = serializers.CharField(
+        source="get_type_display",
+        read_only=True
+    )
 
     class Meta:
         model = Notification
         fields = [
             "id",
             "type",
+            "type_display",
             "title",
             "message",
             "priority",

@@ -8,41 +8,94 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from apps.accounts.serializers import EmployeeCreateSerializer, ChangePasswordSerializer, LogoutSerializer
 from apps.accounts.models import User  
-
+from apps.accounts.jwt import CustomTokenObtainPairSerializer
 
 class LoginView(APIView):
 
     permission_classes = [AllowAny]
-    
+
     def post(self, request):
 
         email = request.data.get("email")
         password = request.data.get("password")
+        force_login = request.data.get("force_login", False)
 
         try:
             user = User.objects.get(email=email)
         except User.DoesNotExist:
-            return Response({"error": "Login failed. Invalid email or password"}, status=400)
+            return Response(
+                {"error": "Login failed. Invalid email or password"},
+                status=400,
+            )
 
-        user = authenticate(username=user.username, password=password)
+        if user.is_blocked:
+            return Response(
+                {"error": "Account blocked. Contact admin."},
+                status=403,
+            )
+
+        user = authenticate(
+            username=user.username,
+            password=password,
+        )
 
         if user is None:
-            return Response({"error": "Login failed. Invalid email or password"}, status=400)
+            return Response(
+                {"error": "Login failed. Invalid email or password"},
+                status=400,
+            )
+
+        already_logged_in = user.token_version > 1
+
+        if already_logged_in and not force_login:
+            return Response(
+                {
+                    "requires_force_login": True,
+                    "message": (
+                        "Account already logged in on another device. "
+                        "Continue and logout other device?"
+                    ),
+                },
+                status=409,
+            )
+
+        if already_logged_in and force_login:
+            user.failed_device_login_count += 1
+
+            if user.failed_device_login_count >= 3:
+                user.is_blocked = True
+                user.save(
+                    update_fields=[
+                        "failed_device_login_count",
+                        "is_blocked",
+                    ]
+                )
+
+                return Response(
+                    {
+                        "error": (
+                            "Account blocked due to multiple "
+                            "device login attempts."
+                        )
+                    },
+                    status=403,
+                )
+
+        user.token_version += 1
+
+        user.save(
+            update_fields=[
+                "token_version",
+                "failed_device_login_count",
+            ]
+        )
+
+        refresh = CustomTokenObtainPairSerializer.get_token(user)
         
-        if user is None:
-            return Response({"error": "Login failed. Invalid email or password"}, status=400)
-
-        refresh = RefreshToken.for_user(user)
-
         return Response({
             "access": str(refresh.access_token),
             "refresh": str(refresh),
-            # "user_id": user.id,
-            # "user_name": user.username,
-            # "shop_name": user.shop.name if user.shop else None,
-            # "role": user.role
         })
-    
 
 class UserDetailView(APIView):
     permission_classes = [IsAuthenticated]
