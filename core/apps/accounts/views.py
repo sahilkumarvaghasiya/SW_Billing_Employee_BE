@@ -27,27 +27,32 @@ class LoginView(APIView):
                 {"error": "Login failed. Invalid email or password"},
                 status=400,
             )
-
-        if user.is_blocked:
-            return Response(
-                {"error": "Account blocked. Contact admin."},
-                status=403,
-            )
-
+        
         user = authenticate(
             username=user.username,
             password=password,
         )
-
         if user is None:
             return Response(
                 {"error": "Login failed. Invalid email or password"},
                 status=400,
             )
+        
+        if user.is_blocked:
+            return Response(
+                {
+                    "error": (
+                        "Access to your account is currently restricted. "
+                        "Please contact the administrator."
+                    )
+                },
+                status=403,
+            )
 
-        already_logged_in = user.token_version > 1
+        already_logged_in = user.session_active
 
         if already_logged_in and not force_login:
+            remaining_attempts = max(0, 3 - user.failed_device_login_count)
             return Response(
                 {
                     "requires_force_login": True,
@@ -55,6 +60,7 @@ class LoginView(APIView):
                         "Account already logged in on another device. "
                         "Continue and logout other device?"
                     ),
+                    "remaining_attempts": remaining_attempts,
                 },
                 status=409,
             )
@@ -62,31 +68,35 @@ class LoginView(APIView):
         if already_logged_in and force_login:
             user.failed_device_login_count += 1
 
-            if user.failed_device_login_count >= 3:
+            if user.failed_device_login_count > 3:
                 user.is_blocked = True
+                user.session_active = False
                 user.save(
                     update_fields=[
                         "failed_device_login_count",
                         "is_blocked",
+                        "session_active",
                     ]
                 )
 
                 return Response(
                     {
                         "error": (
-                            "Account blocked due to multiple "
-                            "device login attempts."
+                            "Access to your account is currently restricted. "
+                            "Please contact the administrator."
                         )
                     },
                     status=403,
                 )
 
         user.token_version += 1
+        user.session_active = True
 
         user.save(
             update_fields=[
                 "token_version",
                 "failed_device_login_count",
+                "session_active",
             ]
         )
 
@@ -95,6 +105,7 @@ class LoginView(APIView):
         return Response({
             "access": str(refresh.access_token),
             "refresh": str(refresh),
+            "token_version": user.token_version,
         })
 
 class UserDetailView(APIView):
@@ -144,7 +155,15 @@ class ChangePasswordView(APIView):
             return Response({"new_password": exc.messages}, status=400)
 
         request.user.set_password(new_password)
-        request.user.save(update_fields=["password"])
+        request.user.token_version += 1
+        request.user.session_active = False
+        request.user.save(
+            update_fields=[
+                "password",
+                "token_version",
+                "session_active",
+            ]
+        )
 
         return Response({"message": "Password changed successfully."}, status=200)
 
@@ -163,5 +182,14 @@ class LogoutView(APIView):
             token.blacklist()
         except TokenError:
             return Response({"error": "Invalid or expired refresh token."}, status=400)
+
+        request.user.session_active = False
+        request.user.token_version += 1
+        request.user.save(
+            update_fields=[
+                "session_active",
+                "token_version",
+            ]
+        )
 
         return Response({"message": "Logout successful."}, status=200)

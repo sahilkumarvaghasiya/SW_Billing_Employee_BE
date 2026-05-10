@@ -16,6 +16,7 @@ class User(AbstractUser):
     token_version = models.PositiveIntegerField(default=1)
     failed_device_login_count = models.PositiveIntegerField(default=0)
     is_blocked = models.BooleanField(default=False)
+    session_active = models.BooleanField(default=False)
     shop = models.ForeignKey(
         Shop,
         on_delete=models.CASCADE,
@@ -28,9 +29,15 @@ class User(AbstractUser):
         if self.pk:
             old = User.objects.filter(pk=self.pk).first()
 
-            if old and old.is_blocked and not self.is_blocked:
-                self.failed_device_login_count = 0
-                self.token_version += 1
+            if old:
+                if not old.is_blocked and self.is_blocked:
+                    self.session_active = False
+                    self.token_version += 1
+
+                if old.is_blocked and not self.is_blocked:
+                    self.failed_device_login_count = 0
+                    self.session_active = False
+                    self.token_version += 1
 
         if not self.password.startswith("pbkdf2"):
             self.set_password(self.password)

@@ -130,6 +130,7 @@ class TodaySummaryViewSet(viewsets.ReadOnlyModelViewSet):
     def list(self, request, *args, **kwargs):
         today = timezone.localdate()
         today_bills = Bill.objects.filter(
+            created_by=request.user,
             shop=request.user.shop,
             created_at__date=today,
         )
