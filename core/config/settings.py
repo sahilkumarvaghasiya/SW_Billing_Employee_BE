@@ -201,6 +201,6 @@ LOW_STOCK_PRE_ALERT_BUFFER = int(os.getenv("LOW_STOCK_PRE_ALERT_BUFFER", 10))
 CELERY_BEAT_SCHEDULE = {
     "vendor-payment-due-alerts-every-morning": {
         "task": "apps.vendors.tasks.process_vendor_payment_due_alerts",
-        "schedule": crontab(hour=0, minute=1), # every day at 8:00 AM
+        "schedule": crontab(hour=8, minute=0), # every day at 8:00 AM
     },
 }
