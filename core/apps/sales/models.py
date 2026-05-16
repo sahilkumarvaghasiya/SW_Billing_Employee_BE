@@ -195,7 +195,6 @@ class Notification(models.Model):
     title = models.CharField(max_length=120)
     message = models.TextField()
     priority = models.CharField(max_length=10, choices=Priority.choices, default=Priority.MEDIUM)
-    is_seen = models.BooleanField(default=False, db_index=True)
     product_variant = models.ForeignKey(
         ProductVariant,
         on_delete=models.SET_NULL,
@@ -216,21 +215,29 @@ class Notification(models.Model):
     class Meta:
         ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=["shop", "is_seen", "created_at"]),
-            models.Index(fields=["shop", "type", "is_seen"]),
-        ]
-        constraints = [
-            models.UniqueConstraint(
-                fields=["shop", "type", "product_variant"],
-                condition=models.Q(is_seen=False),
-                name="uniq_unread_variant_notification_per_type",
-            ),
-            models.UniqueConstraint(
-                fields=["shop", "type", "stock_entry"],
-                condition=models.Q(is_seen=False),
-                name="uniq_unread_stock_entry_notification_per_type",
-            ),
+            models.Index(fields=["shop", "created_at"]),
+            models.Index(fields=["shop", "type"]),
         ]
 
     def __str__(self):
         return f"{self.get_type_display()} - {self.shop_id}"
+
+
+
+class NotificationRead(models.Model):
+    notification = models.ForeignKey(
+        Notification,
+        on_delete=models.CASCADE,
+        related_name="read_statuses"
+    )
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="notification_reads"
+    )
+    read_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ("notification", "user")

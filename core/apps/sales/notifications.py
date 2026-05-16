@@ -11,7 +11,7 @@ NOTIFICATION_AUTO_DELETE_AFTER = getattr(
 @transaction.atomic
 def purge_expired_notifications(shop_id=None):
     cutoff = timezone.now() - timedelta(hours=NOTIFICATION_AUTO_DELETE_AFTER)
-    queryset = Notification.objects.filter(is_seen=True, created_at__lt=cutoff)
+    queryset = Notification.objects.filter(created_at__lt=cutoff)
 
     if shop_id is not None:
         queryset = queryset.filter(shop_id=shop_id)
@@ -64,15 +64,18 @@ def handle_stock_level_notification(variant):
     Notification.objects.filter(
         shop=variant.product.shop,
         product_variant=variant,
-        type__in=[Notification.Type.LOW_STOCK, Notification.Type.OUT_OF_STOCK, Notification.Type.PRE_LOW_STOCK],
-        is_seen=False,
+        type__in=[
+            Notification.Type.LOW_STOCK,
+            Notification.Type.OUT_OF_STOCK,
+            Notification.Type.PRE_LOW_STOCK
+        ],
     ).exclude(
         type=(
             Notification.Type.OUT_OF_STOCK
             if variant.quantity == 0
             else Notification.Type.LOW_STOCK
         )
-    ).update(is_seen=True)
+    ).delete()
 
     pre_alert_buffer = getattr(
         settings,"LOW_STOCK_PRE_ALERT_BUFFER",10)
@@ -90,7 +93,6 @@ def handle_stock_level_notification(variant):
             shop=variant.product.shop,
             type=Notification.Type.PRE_LOW_STOCK,
             product_variant=variant,
-            is_seen=False,
         ).first()
 
         if existing_pre_alert:
@@ -130,9 +132,12 @@ def handle_stock_level_notification(variant):
         Notification.objects.filter(
             shop=variant.product.shop,
             product_variant=variant,
-            type__in=[Notification.Type.LOW_STOCK, Notification.Type.OUT_OF_STOCK, Notification.Type.PRE_LOW_STOCK],
-            is_seen=False,
-        ).update(is_seen=True)
+            type__in=[
+                Notification.Type.LOW_STOCK,
+                Notification.Type.OUT_OF_STOCK,
+                Notification.Type.PRE_LOW_STOCK
+            ],
+        ).delete()
 
         variant.low_stock_alert_sent_once = False
         variant.out_of_stock_alert_sent_once = False
@@ -166,7 +171,6 @@ def handle_stock_level_notification(variant):
         shop=variant.product.shop,
         type=notification_type,
         product_variant=variant,
-        is_seen=False,
     ).first()
 
     if unseen_existing:
@@ -219,7 +223,6 @@ def create_vendor_payment_due_notification(stock_entry):
         shop_id=stock_entry.shop_id,
         type=Notification.Type.VENDOR_PAYMENT_DUE,
         stock_entry=stock_entry,
-        is_seen=False,
         created_at__date=today,
     ).first()
 
@@ -230,8 +233,7 @@ def create_vendor_payment_due_notification(stock_entry):
         shop_id=stock_entry.shop_id,
         type=Notification.Type.VENDOR_PAYMENT_DUE,
         stock_entry=stock_entry,
-        is_seen=False,
-    ).update(is_seen=True)
+    ).delete()
 
     due_text = (
         stock_entry.due_date.strftime("%d %b %Y")
@@ -258,5 +260,4 @@ def mark_vendor_payment_due_notification_resolved(stock_entry):
         shop_id=stock_entry.shop_id,
         type=Notification.Type.VENDOR_PAYMENT_DUE,
         stock_entry=stock_entry,
-        is_seen=False,
-    ).update(is_seen=True)
+    ).delete()

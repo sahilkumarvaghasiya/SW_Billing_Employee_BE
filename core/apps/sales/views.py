@@ -16,7 +16,7 @@ from apps.sales.notifications import (
     purge_expired_notifications,
 )
 from apps.sales.pagination import SalesBarcodeLookupPagination, SalesHistoryPagination
-from apps.sales.models import Bill, BillItem, Customer, Notification, PaymentConfig
+from apps.sales.models import Bill, BillItem, Customer, Notification, PaymentConfig, NotificationRead
 from apps.sales.serializers import (
     BillCreateSerializer,
     BarcodeLookupProductSerializer,
@@ -30,6 +30,7 @@ from apps.sales.utils import format_indian_amount
 import os
 from apps.sales.services.pdf_service import generate_bill_pdf
 from apps.sales.services.whatsapp_service import upload_pdf_to_meta, send_invoice_template_message
+from django.db.models import Exists, OuterRef
 
 class BarcodeProductLookupListView(viewsets.ReadOnlyModelViewSet):
     serializer_class = BarcodeLookupProductSerializer
@@ -415,22 +416,31 @@ class NotificationUnreadListViewSet(viewsets.ReadOnlyModelViewSet):
     http_method_names = ["get"]
 
     NOTIFICATION_AUTO_DELETE_AFTER = getattr(settings, 'NOTIFICATION_AUTO_DELETE_AFTER_HOURS', 48)
-
     def get_queryset(self):
         purge_expired_notifications(shop_id=self.request.user.shop_id)
-        cutoff = timezone.now() - timedelta(hours=self.NOTIFICATION_AUTO_DELETE_AFTER)
-        return (
-            Notification.objects.filter(shop=self.request.user.shop)
-            .filter(Q(is_seen=False) | Q(created_at__gte=cutoff))
-            .order_by("-created_at")
+
+        cutoff = timezone.now() - timedelta(
+            hours=self.NOTIFICATION_AUTO_DELETE_AFTER
         )
 
+        read_subquery = NotificationRead.objects.filter(
+            notification=OuterRef("pk"),
+            user=self.request.user,
+        )
+
+        return (
+            Notification.objects.filter(
+                shop=self.request.user.shop,
+                created_at__gte=cutoff,
+            )
+            .annotate(is_read=Exists(read_subquery))
+            .filter(is_read=False)
+            .order_by("-created_at")
+        )
+    
     def list(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())
-        unseen_total = Notification.objects.filter(
-            shop=request.user.shop,
-            is_seen=False,
-        ).count()
+        unseen_total = queryset.count()
 
         serializer = self.get_serializer(queryset, many=True)
         return Response(
@@ -446,21 +456,31 @@ class NotificationMarkSeenViewSet(viewsets.ModelViewSet):
     permission_classes = [IsEmployee]
     http_method_names = ["post"]
     queryset = Notification.objects.none()
-
+    
     def create(self, request, *args, **kwargs):
-        pending_queryset = Notification.objects.filter(
-            shop=request.user.shop,
-            is_seen=False,
+
+        notifications = Notification.objects.exclude(
+            read_statuses__user=request.user
+        ).filter(
+            shop=request.user.shop
         )
 
-        updated = pending_queryset.update(is_seen=True)
+        read_objects = [
+            NotificationRead(
+                notification=notification,
+                user=request.user,
+            )
+            for notification in notifications
+        ]
+
+        NotificationRead.objects.bulk_create(
+            read_objects,
+            ignore_conflicts=True,
+        )
 
         return Response(
             {
                 "message": "Notifications marked as seen.",
-                "updated_count": updated,
             },
             status=status.HTTP_200_OK,
         )
-
-
