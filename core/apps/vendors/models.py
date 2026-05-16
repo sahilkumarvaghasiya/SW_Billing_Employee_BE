@@ -71,7 +71,7 @@ class StockEntry(models.Model):
 
     stk_number = models.CharField(max_length=100, unique=True, db_index=True)
     total_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-    paid_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    paid_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0, blank=True, null=True)
     status = models.CharField(
         max_length=10,
         choices=StatusChoices.choices,
