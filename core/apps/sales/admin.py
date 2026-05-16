@@ -136,7 +136,7 @@ class NotificationAdmin(admin.ModelAdmin):
 	search_fields = (
 		"title",
 		"message",
-		"stock_entry__invoice_number",
+		"stock_entry__stk_number",
 	)
 	list_filter = (
 		"shop",

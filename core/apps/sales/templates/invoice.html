@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+
+        * { margin: 0; padding: 0; }
+
+        body {
+            font-family: Helvetica, Arial, sans-serif;
+            font-size: 12px;
+            color: #222;
+            background: #fff;
+            padding: 40px 44px;
+            line-height: 1.5;
+        }
+
+        /* ─── TOP ACCENT BAR ─── */
+        .accent-bar {
+            background: #2c2c2c;
+            height: 5px;
+            width: 100%;
+            margin-bottom: 28px;
+        }
+
+        /* ─── HEADER ─── */
+        .header-table {
+            width: 100%;
+            margin-bottom: 28px;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 20px;
+        }
+
+        .shop-name {
+            font-size: 24px;
+            font-weight: bold;
+            color: #1a1a1a;
+            letter-spacing: -0.3px;
+        }
+
+        .shop-sub {
+            font-size: 11px;
+            color: #777;
+            margin-top: 5px;
+            line-height: 1.7;
+        }
+
+        .invoice-right {
+            text-align: right;
+        }
+
+        .tax-invoice-label {
+            font-size: 11px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: #999;
+        }
+
+        .bill-number {
+            font-size: 20px;
+            font-weight: bold;
+            color: #1a1a1a;
+            margin-top: 3px;
+        }
+
+        .bill-date {
+            font-size: 11px;
+            color: #888;
+            margin-top: 3px;
+        }
+
+        /* ─── INFO CARDS ─── */
+        .cards-table {
+            width: 100%;
+            margin-bottom: 24px;
+        }
+
+        .cards-table td {
+            vertical-align: top;
+        }
+
+        .card {
+            border: 1px solid #e8e8e8;
+            padding: 14px 16px;
+            background: #fafafa;
+        }
+
+        .card-title {
+            font-size: 9px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: #aaa;
+            margin-bottom: 8px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 6px;
+        }
+
+        .card-name {
+            font-size: 14px;
+            font-weight: bold;
+            color: #1a1a1a;
+            margin-bottom: 3px;
+        }
+
+        .card-line {
+            font-size: 11.5px;
+            color: #444;
+            margin-top: 2px;
+        }
+
+        .badge {
+            font-size: 10px;
+            font-weight: bold;
+            padding: 2px 10px;
+            display: inline;
+        }
+
+        .badge-paid {
+            background: #e6f9e6;
+            color: #1e8c1e;
+        }
+
+        .badge-failed {
+            background: #fce8e8;
+            color: #c0392b;
+        }
+
+        /* ─── ITEMS TABLE ─── */
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 24px;
+        }
+
+        .items-table thead tr {
+            background: #2c2c2c;
+        }
+
+        .items-table th {
+            color: #fff;
+            font-size: 10px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            padding: 10px 12px;
+            text-align: left;
+        }
+
+        .items-table th.r { text-align: right; }
+
+        .items-table td {
+            padding: 9px 12px;
+            font-size: 12px;
+            color: #222;
+            border-bottom: 1px solid #efefef;
+        }
+
+        .items-table td.r { text-align: right; }
+
+        .items-table tr.even td { background: #f9f9f9; }
+
+        .items-table tbody tr:last-child td { border-bottom: none; }
+
+        .col-sr { width: 30px; color: #aaa; font-size: 11px; }
+        .col-product { font-weight: bold; }
+        .col-disc { color: #d44; }
+        .col-total { font-weight: bold; }
+
+        /* ─── BOTTOM ─── */
+        .bottom-table {
+            width: 100%;
+        }
+
+        .bottom-table td { vertical-align: top; }
+
+        .payment-col { width: 50%; padding-right: 24px; }
+
+        .section-title {
+            font-size: 9px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: #aaa;
+            margin-bottom: 10px;
+            padding-bottom: 6px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .pay-method {
+            font-size: 13px;
+            font-weight: bold;
+            color: #1a1a1a;
+            margin-bottom: 4px;
+        }
+
+        .pay-config {
+            font-size: 11px;
+            color: #666;
+        }
+
+        .qr-img {
+            width: 90px;
+            height: 90px;
+            margin-top: 10px;
+            border: 1px solid #ddd;
+            padding: 4px;
+        }
+
+        .qr-label {
+            font-size: 10px;
+            color: #999;
+            margin-top: 4px;
+        }
+
+        /* ─── SUMMARY ─── */
+        .summary-col { width: 50%; }
+
+        .summary-table {
+            width: 100%;
+            border-collapse: collapse;
+            border: 1px solid #e8e8e8;
+        }
+
+        .summary-table td {
+            padding: 9px 14px;
+            font-size: 12px;
+            border-bottom: 1px solid #efefef;
+        }
+
+        .summary-table td.sv { text-align: right; }
+
+        .summary-table .lbl { color: #555; }
+
+        .summary-table .disc-row td { color: #d44; }
+
+        .summary-table .total-row td {
+            background: #2c2c2c;
+            color: #fff;
+            font-weight: bold;
+            font-size: 14px;
+            border-bottom: none;
+            padding: 12px 14px;
+        }
+
+        /* ─── FOOTER ─── */
+        .footer-wrap {
+            margin-top: 32px;
+            border-top: 1px dashed #ddd;
+            padding-top: 16px;
+        }
+
+        .footer-table { width: 100%; }
+
+        .footer-msg {
+            font-size: 13px;
+            font-weight: bold;
+            color: #1a1a1a;
+        }
+
+        .footer-sub {
+            font-size: 11px;
+            color: #999;
+            margin-top: 3px;
+        }
+
+        .footer-right {
+            text-align: right;
+            font-size: 10px;
+            color: #ccc;
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- Accent Bar -->
+    <div class="accent-bar"></div>
+
+    <!-- Header -->
+    <table class="header-table" cellpadding="0" cellspacing="0">
+        <tr>
+            <td>
+                <div class="shop-name">{{ bill.shop.name }}</div>
+                <div class="shop-sub">
+                    {% if bill.shop.phone %}{{ bill.shop.phone }}<br>{% endif %}
+                    {% if bill.shop.address %}{{ bill.shop.address }}<br>{% endif %}
+                    {% if bill.shop.gst_number %}GST No: {{ bill.shop.gst_number }}{% endif %}
+                </div>
+            </td>
+            <td class="invoice-right">
+                <div class="tax-invoice-label">Tax Invoice</div>
+                <div class="bill-number"># {{ bill.bill_number }}</div>
+                <div class="bill-date">{{ bill.created_at|date:"d M Y, h:i A" }}</div>
+            </td>
+        </tr>
+    </table>
+
+    <!-- Info Cards -->
+    <table class="cards-table" cellpadding="0" cellspacing="0">
+        <tr>
+            <td style="width: 49%;">
+                <div class="card">
+                    <div class="card-title">Bill To</div>
+                    <div class="card-name">{{ bill.customer.name|default:"—" }}</div>
+                    <div class="card-line">{{ bill.customer.phone }}</div>
+                    {% if bill.customer.address %}
+                    <div class="card-line">{{ bill.customer.address }}</div>
+                    {% endif %}
+                </div>
+            </td>
+            <td style="width: 2%;"></td>
+            <td style="width: 49%;">
+                <div class="card">
+                    <div class="card-title">Payment Details</div>
+                    <div class="card-line">
+                        <strong>Method:</strong> {{ bill.payment_method|title }}
+                    </div>
+                    <div class="card-line" style="margin-top: 4px;">
+                        <strong>Status:</strong>&nbsp;
+                        {% if bill.payment_status == "paid" %}
+                            <span class="badge badge-paid">Paid</span>
+                        {% else %}
+                            <span class="badge badge-failed">Failed</span>
+                        {% endif %}
+                    </div>
+                    {% if bill.paid_amount and bill.paid_amount != bill.total_amount %}
+                    <div class="card-line" style="margin-top: 4px;">
+                        <strong>Paid Amount:</strong> Rs. {{ bill.paid_amount }}
+                    </div>
+                    {% endif %}
+                    {% if bill.notes %}
+                    <div class="card-line" style="margin-top: 6px; color: #888;">
+                        {{ bill.notes }}
+                    </div>
+                    {% endif %}
+                </div>
+            </td>
+        </tr>
+    </table>
+
+    <!-- Items -->
+    <table class="items-table" cellpadding="0" cellspacing="0">
+        <thead>
+            <tr>
+                <th style="width: 28px;">#</th>
+                <th>Product</th>
+                <th class="r" style="width: 50px;">Qty</th>
+                <th class="r" style="width: 90px;">Price</th>
+                <th class="r" style="width: 90px;">Discount</th>
+                <th class="r" style="width: 90px;">Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in items %}
+            <tr {% if forloop.counter|divisibleby:2 %}class="even"{% endif %}>
+                <td class="col-sr">{{ forloop.counter }}</td>
+                <td class="col-product">{{ item.product_variant.product.name }}</td>
+                <td class="r">{{ item.quantity }}</td>
+                <td class="r">Rs. {{ item.price }}</td>
+                <td class="r col-disc">
+                    {% if item.discount_amount and item.discount_amount != "0.00" %}
+                        - Rs. {{ item.discount_amount }}
+                    {% else %}
+                        —
+                    {% endif %}
+                </td>
+                <td class="r col-total">Rs. {{ item.total_price }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <!-- Bottom: Payment + Summary -->
+    <table class="bottom-table" cellpadding="0" cellspacing="0">
+        <tr>
+            <td class="payment-col">
+                <div class="section-title">Payment Info</div>
+                <div class="pay-method">{{ bill.payment_method|title }}</div>
+                {% if bill.payment_config_name %}
+                <div class="pay-config">{{ bill.payment_config_name }}</div>
+                {% endif %}
+                {% if bill.payment_config_value and bill.payment_method == "qr" %}
+                <div>
+                    <img class="qr-img" src="{{ bill.payment_config_value }}" alt="QR">
+                    <div class="qr-label">Scan to pay</div>
+                </div>
+                {% endif %}
+            </td>
+            <td class="summary-col">
+                <table class="summary-table" cellpadding="0" cellspacing="0">
+                    <tr>
+                        <td class="lbl">Subtotal</td>
+                        <td class="sv">Rs. {{ bill.subtotal }}</td>
+                    </tr>
+                    {% if bill.discount_amount and bill.discount_amount != "0.00" %}
+                    <tr class="disc-row">
+                        <td class="lbl">
+                            Discount{% if bill.discount_percent and bill.discount_percent != "0.00" %} ({{ bill.discount_percent }}%){% endif %}
+                        </td>
+                        <td class="sv">- Rs. {{ bill.discount_amount }}</td>
+                    </tr>
+                    {% endif %}
+                    <tr>
+                        <td class="lbl">Paid</td>
+                        <td class="sv">Rs. {{ bill.paid_amount }}</td>
+                    </tr>
+                    <tr class="total-row">
+                        <td>Grand Total</td>
+                        <td class="sv">Rs. {{ bill.total_amount }}</td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+
+    <!-- Footer -->
+    <div class="footer-wrap">
+        <table class="footer-table" cellpadding="0" cellspacing="0">
+            <tr>
+                <td>
+                    <div class="footer-msg">Thank you for shopping!</div>
+                    <div class="footer-sub">We look forward to seeing you again.</div>
+                </td>
+                <td class="footer-right">{{ bill.shop.name }}</td>
+            </tr>
+        </table>
+    </div>
+
+</body>
+</html>

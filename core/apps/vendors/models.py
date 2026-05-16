@@ -69,7 +69,7 @@ class StockEntry(models.Model):
         related_name="stock_entries"
     )
 
-    invoice_number = models.CharField(max_length=100, unique=True, db_index=True)
+    stk_number = models.CharField(max_length=100, unique=True, db_index=True)
     total_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     paid_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     status = models.CharField(
@@ -93,16 +93,10 @@ class StockEntry(models.Model):
             models.Index(fields=["created_at"]),
         ]
     
-    def generate_invoice_number(self):
+    def generate_stk_number(self):
         today = timezone.now().date()
         date_str = today.strftime("%Y%m%d")
-
-        count = StockEntry.objects.filter(
-            shop=self.shop,
-            created_at__date=today
-        ).count() + 1
-
-        return f"INV-{self.shop.id}-{date_str}-{uuid.uuid4().hex[:6].upper()}"
+        return f"STK-{self.shop.id}-{date_str}-{uuid.uuid4().hex[:6].upper()}"
 
     def clean(self):
         if self.total_amount < 0 or self.paid_amount < 0:
@@ -112,8 +106,8 @@ class StockEntry(models.Model):
             raise ValueError("Paid amount cannot exceed total amount")
 
     def save(self, *args, **kwargs):
-        if not self.invoice_number:
-            self.invoice_number = self.generate_invoice_number()
+        if not self.stk_number:
+            self.stk_number = self.generate_stk_number()
 
         self.full_clean()
 
@@ -135,7 +129,7 @@ class StockEntry(models.Model):
             mark_vendor_payment_due_notification_resolved(self)
 
     def __str__(self):
-        return self.invoice_number
+        return self.stk_number
 
     def alert_start_date(self, alert_before_days=5):
         if not self.due_date:

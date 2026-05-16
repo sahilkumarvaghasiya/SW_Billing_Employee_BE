@@ -27,6 +27,9 @@ from apps.sales.serializers import (
     SalesHistoryListSerializer,
 )
 from apps.sales.utils import format_indian_amount
+import os
+from apps.sales.services.pdf_service import generate_bill_pdf
+from apps.sales.services.whatsapp_service import upload_pdf_to_meta, send_invoice_template_message
 
 class BarcodeProductLookupListView(viewsets.ReadOnlyModelViewSet):
     serializer_class = BarcodeLookupProductSerializer
@@ -73,9 +76,10 @@ class BarcodeProductLookupListView(viewsets.ReadOnlyModelViewSet):
             total_count == 1
             and barcode_number in scanned_barcodes_list
         ):
+            product = barcode_queryset.first()
             raise ValidationError({
                 "quantity": [
-                    "Already scanned. Please increase quantity."
+                     f"{product.product.name} already scanned. Please increase quantity."
                 ]
             })
 
@@ -243,7 +247,6 @@ class BillCreateViewSet(viewsets.ModelViewSet):
     @transaction.atomic
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
-        print(request.data,"request data")
         serializer.is_valid(raise_exception=True)
         validated_data = serializer.validated_data
 
@@ -340,6 +343,26 @@ class BillCreateViewSet(viewsets.ModelViewSet):
             )
 
         BillItem.objects.bulk_create(bill_items)
+
+        try:
+            created_items = bill.bill_items.all().order_by("created_at")
+            pdf_path = generate_bill_pdf(
+                bill=bill,
+                items=created_items,
+            )
+            media_id = upload_pdf_to_meta(pdf_path, shop=request.user.shop)
+            send_invoice_template_message(
+                shop=request.user.shop,
+                phone=bill.customer.phone,
+                media_id=media_id,
+                customer_name=bill.customer.name,
+                bill_number=bill.bill_number,
+            )
+            if os.path.exists(pdf_path):
+                os.remove(pdf_path)
+
+        except Exception as e:
+            print(f"WhatsApp invoice send failed: {str(e)}")
 
         return Response(
             {

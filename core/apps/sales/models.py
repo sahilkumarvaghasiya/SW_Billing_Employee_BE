@@ -119,12 +119,7 @@ class Bill(models.Model):
         today = timezone.now().date()
         date_str = today.strftime("%Y%m%d")
 
-        count = Bill.objects.filter(
-            shop=self.shop,
-            created_at__date=today
-        ).count() + 1
-
-        return f"{date_str}-{self.shop.id}-{uuid.uuid4().hex[:6].upper()}"
+        return f"BILL-{date_str}-{self.shop.id}-{uuid.uuid4().hex[:6].upper()}"
 
     @staticmethod
     def _to_money(value):

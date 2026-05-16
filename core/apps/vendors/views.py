@@ -105,7 +105,7 @@ class VendorStockCreateViewSet(viewsets.ModelViewSet):
             {
                 "message": "Stock entry created successfully.",
                 "stock_entry_id": stock_entry.id,
-                "invoice_number": stock_entry.invoice_number,
+                "stk_number": stock_entry.stk_number,
                 "status": stock_entry.status,
                 "total_amount": str(stock_entry.total_amount),
                 "paid_amount": str(stock_entry.paid_amount),
@@ -254,7 +254,7 @@ class VendorExistingStockCreateViewSet(viewsets.ModelViewSet):
                 "message": "Stock entry created for existing vendor.",
                 "vendor_id": vendor.id,
                 "stock_entry_id": stock_entry.id,
-                "invoice_number": stock_entry.invoice_number,
+                "stk_number": stock_entry.stk_number,
                 "status": stock_entry.status,
                 "total_amount": str(stock_entry.total_amount),
                 "paid_amount": str(stock_entry.paid_amount),
@@ -424,7 +424,7 @@ class VendorStockHistoryListViewset(viewsets.ReadOnlyModelViewSet):
         data = [
             {
                 "id": entry.id,
-                "invoice_number": entry.invoice_number,
+                "stk_number": entry.stk_number,
                 "created_date": entry.created_at.strftime("%d-%m-%Y"),
                 "total_amount": format_indian_amount(entry.total_amount),
                 "paid_amount": format_indian_amount(entry.paid_amount),
@@ -440,10 +440,10 @@ class VendorStockHistoryListViewset(viewsets.ReadOnlyModelViewSet):
 
 
 class VendorStockHistoryDetailsViewset(viewsets.ReadOnlyModelViewSet):
-    """Return detailed stock entry information for a given invoice_number.
+    """Return detailed stock entry information for a given stk_number.
 
     Query params:
-      - invoice_number (required): invoice number string
+      - stk_number (required): invoice number string
 
     Response includes invoice metadata, totals, vendor info and a list of
     products with their variants.
@@ -452,15 +452,15 @@ class VendorStockHistoryDetailsViewset(viewsets.ReadOnlyModelViewSet):
     http_method_names = ["get"]
 
     def list(self, request, *args, **kwargs):
-        invoice_number = request.query_params.get("invoice_number")
-        if not invoice_number:
+        stk_number = request.query_params.get("stk_number")
+        if not stk_number:
             return Response(
-                {"message": ["invoice_number query parameter is required."]},
+                {"message": ["stk_number query parameter is required."]},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         shop = request.user.shop
-        stock_entry = get_object_or_404(StockEntry, invoice_number=invoice_number, shop=shop)
+        stock_entry = get_object_or_404(StockEntry, stk_number=stk_number, shop=shop)
 
         variants_qs = (
             stock_entry.stock_variants.select_related("product", "size", "color").order_by("-created_at")
@@ -488,7 +488,7 @@ class VendorStockHistoryDetailsViewset(viewsets.ReadOnlyModelViewSet):
             )
 
         response = {
-            "invoice_number": stock_entry.invoice_number,
+            "stk_number": stock_entry.stk_number,
             "created_date": stock_entry.created_at.strftime("%d-%m-%Y"),
             "vendor_name": stock_entry.vendor.name,
             "total_amount": format_indian_amount(stock_entry.total_amount),
