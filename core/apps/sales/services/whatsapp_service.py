@@ -4,6 +4,21 @@ from apps.shops.models import Shop
 
 
 
+def normalize_indian_phone(phone: str) -> str:
+    phone = (
+        str(phone)
+        .replace(" ", "")
+        .replace("+", "")
+        .replace("-", "")
+        .replace("(", "")
+        .replace(")", "")
+    )
+
+    if not phone.startswith("91"):
+        phone = f"91{phone}"
+
+    return phone
+
 def upload_pdf_to_meta(pdf_path, shop: Shop):
     url = f"https://graph.facebook.com/v23.0/{shop.whatsapp_phone_number_id}/media"
 
@@ -63,6 +78,8 @@ def send_invoice_template_message(
     customer_name,
     bill_number,
 ):
+    phone = normalize_indian_phone(phone)
+
     url = f"https://graph.facebook.com/v23.0/{shop.whatsapp_phone_number_id}/messages"
 
     headers = {
@@ -82,4 +99,5 @@ def send_invoice_template_message(
 
     response = requests.post(url, headers=headers, json=payload)
     response.raise_for_status()
+
     return response.json()
