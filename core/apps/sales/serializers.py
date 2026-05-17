@@ -8,7 +8,7 @@ from apps.sales.utils import format_indian_amount
 
 
 class BarcodeLookupProductSerializer(serializers.ModelSerializer):
-    product_name = serializers.CharField(source="product.item_type.name")
+    product_name = serializers.SerializerMethodField()
     size = serializers.SerializerMethodField()
     final_price = serializers.SerializerMethodField()
     quantity = serializers.IntegerField()
@@ -25,6 +25,11 @@ class BarcodeLookupProductSerializer(serializers.ModelSerializer):
 
     def get_size(self, obj):
         return obj.size.name if obj.size else None
+
+    def get_product_name(self, obj):
+        product = getattr(obj, "product", None)
+        item_type = getattr(product, "item_type", None)
+        return item_type.name if item_type else None
 
     def get_final_price(self, obj):
         return obj.final_price()
