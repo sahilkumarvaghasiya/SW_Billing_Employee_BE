@@ -211,6 +211,8 @@
         <div class="shop-header">
             <div class="shop-name">{{ bill.shop.name }}</div>
             <div class="subtext center">
+                {% if bill.shop.mobile_number %}{{ bill.shop.mobile_number }}<br />{% endif %}
+                {% if bill.shop.address %}{{ bill.shop.address }}<br />{% endif %}
                 {% if bill.shop.gst_number %}GST No: {{ bill.shop.gst_number }}{% endif %}
             </div>
             <div class="shop-divider"></div>
