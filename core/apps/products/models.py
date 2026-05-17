@@ -92,7 +92,7 @@ class Product(models.Model):
         GIRL = 'girl', 'Girl'
 
     shop = models.ForeignKey(Shop, on_delete=models.CASCADE, related_name="products")
-    name = models.CharField(max_length=255)
+    name = models.CharField(max_length=255, null=True, blank=True)
     company = models.ForeignKey(
         Company,
         on_delete=models.SET_NULL,
