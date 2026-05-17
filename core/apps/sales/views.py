@@ -80,7 +80,7 @@ class BarcodeProductLookupListView(viewsets.ReadOnlyModelViewSet):
             product = barcode_queryset.first()
             raise ValidationError({
                 "quantity": [
-                     f"{product.product.name} already scanned. Please increase quantity."
+                     f"{product.product.item_type.name} already scanned. Please increase quantity."
                 ]
             })
 
@@ -344,23 +344,23 @@ class BillCreateViewSet(viewsets.ModelViewSet):
             )
 
         BillItem.objects.bulk_create(bill_items)
-
         try:
-            created_items = bill.bill_items.all().order_by("created_at")
-            pdf_path = generate_bill_pdf(
-                bill=bill,
-                items=created_items,
-            )
-            media_id = upload_pdf_to_meta(pdf_path, shop=request.user.shop)
-            send_invoice_template_message(
-                shop=request.user.shop,
-                phone=bill.customer.phone,
-                media_id=media_id,
-                customer_name=bill.customer.name,
-                bill_number=bill.bill_number,
-            )
-            if os.path.exists(pdf_path):
-                os.remove(pdf_path)
+            pass
+            # created_items = bill.bill_items.all().order_by("created_at")
+            # pdf_path = generate_bill_pdf(
+            #     bill=bill,
+            #     items=created_items,
+            # )
+            # media_id = upload_pdf_to_meta(pdf_path, shop=request.user.shop)
+            # send_invoice_template_message(
+            #     shop=request.user.shop,
+            #     phone=bill.customer.phone,
+            #     media_id=media_id,
+            #     customer_name=bill.customer.name,
+            #     bill_number=bill.bill_number,
+            # )
+            # if os.path.exists(pdf_path):
+            #     os.remove(pdf_path)
 
         except Exception as e:
             print(f"WhatsApp invoice send failed: {str(e)}")
