@@ -52,7 +52,8 @@ def handle_stock_level_notification(variant):
     Rules:
     - quantity == 0 => OUT_OF_STOCK
     - quantity <= threshold => LOW_STOCK
-    - quantity > threshold => resolve old stock alerts by marking as read
+    - quantity in (threshold, pre_alert] => PRE_LOW_STOCK
+    - quantity > pre_alert => clear stock alerts/reset flags
     """
     variant_model = type(variant)
 
@@ -61,22 +62,6 @@ def handle_stock_level_notification(variant):
 
     purge_expired_notifications(shop_id=variant.product.shop_id)
 
-    Notification.objects.filter(
-        shop=variant.product.shop,
-        product_variant=variant,
-        type__in=[
-            Notification.Type.LOW_STOCK,
-            Notification.Type.OUT_OF_STOCK,
-            Notification.Type.PRE_LOW_STOCK
-        ],
-    ).exclude(
-        type=(
-            Notification.Type.OUT_OF_STOCK
-            if variant.quantity == 0
-            else Notification.Type.LOW_STOCK
-        )
-    ).delete()
-
     pre_alert_buffer = getattr(
         settings,"LOW_STOCK_PRE_ALERT_BUFFER",10)
 
@@ -84,10 +69,43 @@ def handle_stock_level_notification(variant):
         variant.low_stock_threshold + pre_alert_buffer
     )
 
+    if variant.quantity > pre_alert_quantity:
+        Notification.objects.filter(
+            shop=variant.product.shop,
+            product_variant=variant,
+            type__in=[
+                Notification.Type.LOW_STOCK,
+                Notification.Type.OUT_OF_STOCK,
+                Notification.Type.PRE_LOW_STOCK,
+            ],
+        ).delete()
+
+        variant.low_stock_alert_sent_once = False
+        variant.out_of_stock_alert_sent_once = False
+        variant.pre_low_stock_alert_sent_once = False
+        variant.save(
+            update_fields=[
+                "low_stock_alert_sent_once",
+                "out_of_stock_alert_sent_once",
+                "pre_low_stock_alert_sent_once",
+                "updated_at",
+            ]
+        )
+        return None
+
     if (
         variant.quantity <= pre_alert_quantity
         and variant.quantity > variant.low_stock_threshold
     ):
+
+        Notification.objects.filter(
+            shop=variant.product.shop,
+            product_variant=variant,
+            type__in=[
+                Notification.Type.LOW_STOCK,
+                Notification.Type.OUT_OF_STOCK,
+            ],
+        ).delete()
 
         existing_pre_alert = Notification.objects.filter(
             shop=variant.product.shop,
@@ -128,39 +146,33 @@ def handle_stock_level_notification(variant):
 
         return notification
 
-    if variant.quantity > variant.low_stock_threshold:
+    descriptor = _variant_descriptor(variant)
+
+    if variant.quantity == 0:
         Notification.objects.filter(
             shop=variant.product.shop,
             product_variant=variant,
             type__in=[
                 Notification.Type.LOW_STOCK,
-                Notification.Type.OUT_OF_STOCK,
-                Notification.Type.PRE_LOW_STOCK
+                Notification.Type.PRE_LOW_STOCK,
             ],
         ).delete()
 
-        variant.low_stock_alert_sent_once = False
-        variant.out_of_stock_alert_sent_once = False
-        variant.pre_low_stock_alert_sent_once = False
-        variant.save(
-            update_fields=[
-                "low_stock_alert_sent_once",
-                "out_of_stock_alert_sent_once",
-                "pre_low_stock_alert_sent_once",
-                "updated_at",
-            ]
-        )
-        return None
-
-    descriptor = _variant_descriptor(variant)
-
-    if variant.quantity == 0:
         notification_type = Notification.Type.OUT_OF_STOCK
         title = "Out of stock"
         message = f"{descriptor} is out of stock."
         priority = Notification.Priority.HIGH
         alert_already_sent = variant.out_of_stock_alert_sent_once
     else:
+        Notification.objects.filter(
+            shop=variant.product.shop,
+            product_variant=variant,
+            type__in=[
+                Notification.Type.OUT_OF_STOCK,
+                Notification.Type.PRE_LOW_STOCK,
+            ],
+        ).delete()
+
         notification_type = Notification.Type.LOW_STOCK
         title = "Low stock"
         message = f"{descriptor} is low in stock ({variant.quantity} left)."
