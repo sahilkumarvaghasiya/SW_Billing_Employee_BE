@@ -5,6 +5,8 @@ class Shop(models.Model):
 
     name = models.CharField(max_length=200)
     employee_limit = models.IntegerField(default=5)
+    mobile_number = models.CharField(max_length=20, blank=True, null=True)
+    address = models.TextField(blank=True, null=True)
     whatsapp_phone_number_id = models.CharField(max_length=100)
     whatsapp_access_token = models.TextField()
     gst_number = models.CharField(max_length=50, blank=True, null=True)
