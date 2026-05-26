@@ -10,6 +10,7 @@ class ProductVariantListSerializer(serializers.ModelSerializer):
     color = serializers.SerializerMethodField()
     gender = serializers.SerializerMethodField()
     final_price = serializers.SerializerMethodField()
+    purchase_price = serializers.SerializerMethodField()
 
     class Meta:
         model = ProductVariant
@@ -20,6 +21,7 @@ class ProductVariantListSerializer(serializers.ModelSerializer):
             "size",
             "color",
             "gender",
+            "purchase_price",
             "final_price",
         ]
 
@@ -43,6 +45,9 @@ class ProductVariantListSerializer(serializers.ModelSerializer):
     def get_final_price(self, obj):
         return format_indian_amount(obj.final_price())
     
+    def get_purchase_price(self, obj):
+        return format_indian_amount(obj.original_purchase_price)
+    
 class ProductVariantDetailSerializer(serializers.ModelSerializer):
     product_name = serializers.SerializerMethodField()
     company_name = serializers.SerializerMethodField()
@@ -51,6 +56,7 @@ class ProductVariantDetailSerializer(serializers.ModelSerializer):
     size = serializers.SerializerMethodField()
     color = serializers.SerializerMethodField()
     final_price = serializers.SerializerMethodField()
+    purchase_price = serializers.SerializerMethodField()
 
     class Meta:
         model = ProductVariant
@@ -62,6 +68,7 @@ class ProductVariantDetailSerializer(serializers.ModelSerializer):
             "size",
             "color",
             "price",
+            "purchase_price",
             "discount_percent",
             "discount_amount",
             "final_price",
@@ -93,6 +100,9 @@ class ProductVariantDetailSerializer(serializers.ModelSerializer):
 
     def get_final_price(self, obj):
         return format_indian_amount(obj.final_price())
+    
+    def get_purchase_price(self, obj):
+        return format_indian_amount(obj.original_purchase_price)
     
 
 class SizeDropdownSerializer(serializers.ModelSerializer):

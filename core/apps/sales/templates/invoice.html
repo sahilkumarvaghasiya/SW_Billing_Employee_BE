@@ -285,8 +285,8 @@
                 <td class="r">{{ item.quantity }}</td>
                 <td class="r">Rs. {{ item.price }}</td>
                 <td class="r col-disc">
-                    {% if item.discount_amount and item.discount_amount != "0.00" %}
-                        - Rs. {{ item.discount_amount }}
+                    {% if item.custom_amount and item.custom_amount != "0.00" %}
+                        Rs. {{ item.custom_amount }}
                     {% else %}
                         —
                     {% endif %}
@@ -309,10 +309,10 @@
                         <td>Subtotal</td>
                         <td class="val">Rs. {{ bill.subtotal }}</td>
                     </tr>
-                    {% if bill.discount_amount and bill.discount_amount != "0.00" %}
+                    {% if bill.custom_amount and bill.custom_amount != "0.00" %}
                     <tr class="disc">
-                        <td>Discount{% if bill.discount_percent and bill.discount_percent != "0.00" %} ({{ bill.discount_percent }}%){% endif %}</td>
-                        <td class="val">- Rs. {{ bill.discount_amount }}</td>
+                        <td>Custom Amount{% if bill.discount_percent and bill.discount_percent != "0.00" %} ({{ bill.discount_percent }}%){% endif %}</td>
+                        <td class="val">Rs. {{ bill.custom_amount }}</td>
                     </tr>
                     {% endif %}
                     <tr>

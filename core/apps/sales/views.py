@@ -280,7 +280,7 @@ class BillCreateViewSet(viewsets.ModelViewSet):
             customer=customer,
             subtotal=validated_data["computed_subtotal"],
             discount_percent=validated_data.get("bill_discount_percent") or Decimal("0.00"),
-            discount_amount=validated_data["computed_discount_amount"],
+            custom_amount=validated_data.get("bill_custom_amount") or Decimal("0.00"),
             total_amount=validated_data["computed_total_amount"],
             paid_amount=validated_data["computed_paid_amount"],
             payment_method=validated_data["payment_method"],
@@ -338,7 +338,7 @@ class BillCreateViewSet(viewsets.ModelViewSet):
                     quantity=item["quantity"],
                     price=item["price"],
                     discount_percent=item["discount_percent"],
-                    discount_amount=item["discount_amount"],
+                    custom_amount=item["custom_amount"],
                     total_price=item["total_price"],
                 )
             )
@@ -379,7 +379,7 @@ class BillCreateViewSet(viewsets.ModelViewSet):
                 "totals": {
                     "subtotal": str(bill.subtotal),
                     "discount_percent": str(bill.discount_percent),
-                    "discount_amount": str(bill.discount_amount),
+                    "custom_amount": str(bill.custom_amount),
                     "total_amount": str(bill.total_amount),
                     "paid_amount": str(bill.paid_amount),
                 },
@@ -400,7 +400,7 @@ class BillCreateViewSet(viewsets.ModelViewSet):
                         "quantity": item.quantity,
                         "price": str(item.price),
                         "discount_percent": str(item.discount_percent),
-                        "discount_amount": str(item.discount_amount),
+                        "custom_amount": str(item.custom_amount),
                         "total_price": str(item.total_price),
                     }
                     for item in bill.bill_items.all().order_by("created_at")

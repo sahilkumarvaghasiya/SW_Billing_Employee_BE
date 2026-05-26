@@ -81,7 +81,7 @@ class Bill(models.Model):
     bill_number = models.CharField(max_length=50, unique=True, db_index=True)
     subtotal = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
     discount_percent = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal("0.00"))
-    discount_amount = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
+    custom_amount = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
     total_amount = models.DecimalField(max_digits=10, decimal_places=2)
     paid_amount = models.DecimalField(max_digits=10, decimal_places=2)
     payment_method = models.CharField(max_length=10, choices=PaymentMethod.choices)
@@ -129,7 +129,7 @@ class Bill(models.Model):
 
     def save(self, *args, **kwargs):
         self.subtotal = self._to_money(self.subtotal)
-        self.discount_amount = self._to_money(self.discount_amount)
+        self.custom_amount = self._to_money(self.custom_amount)
         self.total_amount = self._to_money(self.total_amount)
         self.paid_amount = self._to_money(self.paid_amount)
         self.discount_percent = Decimal(str(self.discount_percent or Decimal("0.00"))).quantize(
@@ -152,7 +152,7 @@ class BillItem(models.Model):
     quantity = models.PositiveIntegerField(validators=[MinValueValidator(1)])
     price = models.DecimalField(max_digits=10, decimal_places=2)
     discount_percent = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal("0.00"))
-    discount_amount = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
+    custom_amount = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
     total_price = models.DecimalField(max_digits=10, decimal_places=2)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -169,7 +169,7 @@ class BillItem(models.Model):
 
     def save(self, *args, **kwargs):
         self.price = Bill._to_money(self.price)
-        self.discount_amount = Bill._to_money(self.discount_amount)
+        self.custom_amount = Bill._to_money(self.custom_amount)
         self.total_price = Bill._to_money(self.total_price)
         self.discount_percent = Decimal(str(self.discount_percent or Decimal("0.00"))).quantize(
             Decimal("0.01"),

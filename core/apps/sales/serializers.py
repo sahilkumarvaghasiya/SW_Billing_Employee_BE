@@ -1,4 +1,4 @@
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from datetime import timedelta
 from django.utils import timezone
 from rest_framework import serializers
@@ -114,6 +114,9 @@ class SalesHistoryItemDetailSerializer(serializers.ModelSerializer):
         return item_type.name if item_type else None
 
     def get_amount(self, obj):
+        if (obj.custom_amount or Decimal("0.00")) > 0 and (obj.quantity or 0) > 0:
+            unit_price = (obj.total_price or Decimal("0.00")) / Decimal(str(obj.quantity))
+            return format_indian_amount(unit_price)
         return format_indian_amount(obj.price)
 
     def get_discount(self, obj):
@@ -121,7 +124,12 @@ class SalesHistoryItemDetailSerializer(serializers.ModelSerializer):
         if (obj.discount_percent or Decimal("0.00")) > 0:
             discount = (base_total * obj.discount_percent) / Decimal("100")
             return format_indian_amount(discount)
-        return format_indian_amount(obj.discount_amount or Decimal("0.00"))
+        if (obj.custom_amount or Decimal("0.00")) > 0:
+            discount = (base_total - (obj.total_price or Decimal("0.00")))
+            if discount < 0:
+                discount = Decimal("0.00")
+            return format_indian_amount(discount)
+        return format_indian_amount(Decimal("0.00"))
 
     def get_total_amount(self, obj):
         return format_indian_amount(obj.total_price)
@@ -167,7 +175,12 @@ class SalesHistoryDetailSerializer(serializers.ModelSerializer):
         if (obj.discount_percent or Decimal("0.00")) > 0:
             discount = (obj.subtotal or Decimal("0.00")) * obj.discount_percent / Decimal("100")
             return format_indian_amount(discount)
-        return format_indian_amount(obj.discount_amount or Decimal("0.00"))
+        if (obj.custom_amount or Decimal("0.00")) > 0:
+            discount = (obj.subtotal or Decimal("0.00")) - (obj.total_amount or Decimal("0.00"))
+            if discount < 0:
+                discount = Decimal("0.00")
+            return format_indian_amount(discount)
+        return format_indian_amount(Decimal("0.00"))
 
     def get_total_amount(self, obj):
         return format_indian_amount(obj.total_amount)
@@ -177,14 +190,16 @@ class BillItemCreateSerializer(serializers.Serializer):
     product_variant_id = serializers.IntegerField()
     quantity = serializers.IntegerField(min_value=1)
     discount_percent = serializers.DecimalField(max_digits=5, decimal_places=2, required=False, default=Decimal("0.00"))
-    discount_amount = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, default=Decimal("0.00"))
+    custom_amount = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, default=Decimal("0.00"))
 
     def validate(self, attrs):
         discount_percent = attrs.get("discount_percent") or Decimal("0.00")
-        discount_amount = attrs.get("discount_amount") or Decimal("0.00")
+        custom_amount = attrs.get("custom_amount") or Decimal("0.00")
 
-        if discount_percent > 0 and discount_amount > 0:
-            raise serializers.ValidationError({"bill_item": ["Provide either discount percent or discount amount for each item, not both."]})
+        if custom_amount < 0:
+            raise serializers.ValidationError({"bill_item": ["Custom amount cannot be negative."]})
+        if discount_percent > 0 and custom_amount > 0:
+            raise serializers.ValidationError({"bill_item": ["Provide either discount percent or custom amount for each item, not both."]})
         return attrs
 
 
@@ -194,7 +209,7 @@ class BillCreateSerializer(serializers.Serializer):
     address = serializers.CharField(required=False, allow_blank=True)
     items = BillItemCreateSerializer(many=True)
     bill_discount_percent = serializers.DecimalField(max_digits=5, decimal_places=2, required=False, default=Decimal("0.00"))
-    bill_discount_amount = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, default=Decimal("0.00"))
+    bill_custom_amount = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, default=Decimal("0.00"))
     payment_method = serializers.ChoiceField(choices=Bill.PaymentMethod.choices)
     payment_status = serializers.ChoiceField(choices=Bill.PaymentStatus.choices, required=False, default=Bill.PaymentStatus.PAID)
     selected_payment_config_id = serializers.UUIDField(required=False, allow_null=True)
@@ -213,7 +228,12 @@ class BillCreateSerializer(serializers.Serializer):
         attrs["address"] = (attrs.get("address") or "").strip()
 
         bill_discount_percent = attrs.get("bill_discount_percent") or Decimal("0.00")
-        bill_discount_amount = attrs.get("bill_discount_amount") or Decimal("0.00")
+        bill_custom_amount = attrs.get("bill_custom_amount") or Decimal("0.00")
+
+        if bill_custom_amount < 0:
+            raise serializers.ValidationError({"bill_custom_amount": ["Custom amount cannot be negative."]})
+        if bill_discount_percent > 0 and bill_custom_amount > 0:
+            raise serializers.ValidationError({"bill_custom_amount": ["Provide either discount percent or custom amount for the bill, not both."]})
 
         if not attrs.get("items"):
             raise serializers.ValidationError({"items": ["At least one bill item is required."]})
@@ -274,14 +294,22 @@ class BillCreateSerializer(serializers.Serializer):
             base_total = price * quantity
 
             item_discount_percent = item.get("discount_percent") or Decimal("0.00")
-            item_discount_amount = item.get("discount_amount") or Decimal("0.00")
-            if item_discount_percent > 0:
-                item_discount = base_total * item_discount_percent / Decimal("100")
-            else:
-                item_discount = item_discount_amount
+            item_custom_amount = item.get("custom_amount") or Decimal("0.00")
+            if item_custom_amount < 0:
+                raise serializers.ValidationError({"items": ["Custom amount cannot be negative."]})
 
-            item_discount = min(item_discount, base_total)
-            line_total = max(base_total - item_discount, Decimal("0.00"))
+            if item_custom_amount > 0:
+                line_total = item_custom_amount
+                price = (item_custom_amount / Decimal(str(quantity))).quantize(
+                    Decimal("0.01"),
+                    rounding=ROUND_HALF_UP,
+                )
+            elif item_discount_percent > 0:
+                item_discount = base_total * item_discount_percent / Decimal("100")
+                item_discount = min(item_discount, base_total)
+                line_total = max(base_total - item_discount, Decimal("0.00"))
+            else:
+                line_total = base_total
             subtotal += line_total
 
             prepared_items.append(
@@ -290,23 +318,23 @@ class BillCreateSerializer(serializers.Serializer):
                     "quantity": quantity,
                     "price": price,
                     "discount_percent": item_discount_percent,
-                    "discount_amount": item_discount_amount,
+                    "custom_amount": item_custom_amount,
                     "total_price": line_total,
                 }
             )
 
-        if bill_discount_percent > 0:
+        if bill_custom_amount > 0:
+            total_amount = bill_custom_amount
+        elif bill_discount_percent > 0:
             bill_discount_value = subtotal * bill_discount_percent / Decimal("100")
+            bill_discount_value = min(bill_discount_value, subtotal)
+            total_amount = max(subtotal - bill_discount_value, Decimal("0.00"))
         else:
-            bill_discount_value = bill_discount_amount
-
-        bill_discount_value = min(bill_discount_value, subtotal)
-        total_amount = max(subtotal - bill_discount_value, Decimal("0.00"))
+            total_amount = subtotal
 
         attrs["selected_payment_config"] = payment_config
         attrs["prepared_items"] = prepared_items
         attrs["computed_subtotal"] = subtotal
-        attrs["computed_discount_amount"] = bill_discount_value
         attrs["computed_total_amount"] = total_amount
         attrs["computed_paid_amount"] = total_amount
         return attrs

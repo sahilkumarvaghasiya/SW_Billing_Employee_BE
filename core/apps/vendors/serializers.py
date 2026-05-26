@@ -19,8 +19,12 @@ class LookupValueField(serializers.Field):
 
         if isinstance(data, str):
             value = data.strip()
+
             if not value:
+                if self.allow_null or not self.required:
+                    return None
                 self.fail("blank")
+
             return value
 
         if isinstance(data, dict):
@@ -75,10 +79,11 @@ class StockProductVariantSerializer(serializers.Serializer):
     colour = LookupValueField()
     pieces = serializers.IntegerField(min_value=1)
     sellprice = serializers.DecimalField(max_digits=10, decimal_places=2, min_value=0.01)
+    purchase_price = serializers.DecimalField(max_digits=10, decimal_places=2, min_value=0.01)
 
 
 class StockProductSerializer(serializers.Serializer):
-    company_name = LookupValueField()
+    company_name = LookupValueField(required=False, allow_null=True)
     product_type = LookupValueField()
     gender = serializers.ChoiceField(choices=["boy", "girl", "men", "women"])
     barcode_number = serializers.CharField(max_length=100)
@@ -96,7 +101,12 @@ class VendorStockCreateSerializer(serializers.Serializer):
     vendor_address=serializers.CharField(max_length=500, required=False, allow_blank=True, allow_null=True)
     phone = serializers.CharField(max_length=20, required=True)
     email = serializers.EmailField(required=False, allow_blank=True, allow_null=True)
-    gst_number = serializers.CharField(max_length=50, required=True)
+    gst_number = serializers.CharField(
+        max_length=50,
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+    )
     total_amount = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=0)
     paid_amount = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=0)
     paymentdeadlinedate = serializers.DateField()
@@ -109,16 +119,16 @@ class VendorStockCreateSerializer(serializers.Serializer):
         return value
 
     def validate(self, attrs):
+        vendor_name = (attrs.get("vendor_name") or "").strip()
         phone = (attrs.get("phone") or "").strip()
-        gst_number = (attrs.get("gst_number") or "").strip()
-
+        email = (attrs.get("email") or "").strip().lower() or None
+        gst_number = (attrs.get("gst_number") or "").strip() or None
         if not phone:
             raise serializers.ValidationError({"phone": "Phone number is required."})
 
-        if not gst_number:
-            raise serializers.ValidationError({"gst_number": "GST number is required."})
-
+        attrs["vendor_name"] = vendor_name
         attrs["phone"] = phone
+        attrs["email"] = email
         attrs["gst_number"] = gst_number
 
         if attrs["paid_amount"] > attrs["total_amount"]:
@@ -142,6 +152,30 @@ class VendorExistingStockCreateSerializer(serializers.Serializer):
     def validate(self, attrs):
         if attrs["paid_amount"] > attrs["total_amount"]:
             raise serializers.ValidationError({"paid_amount": "Paid amount cannot exceed total amount."})
+        return attrs
+
+
+class VendorValidationSerializer(serializers.Serializer):
+    vendor_name = serializers.CharField(max_length=255)
+    phone = serializers.CharField(max_length=20)
+    email = serializers.EmailField(required=False, allow_blank=True, allow_null=True)
+    gst_number = serializers.CharField(max_length=50, required=False, allow_blank=True, allow_null=True)
+
+    def validate(self, attrs):
+        vendor_name = (attrs.get("vendor_name") or "").strip()
+        phone = (attrs.get("phone") or "").strip()
+        email = (attrs.get("email") or "").strip().lower() or None
+        gst_number = (attrs.get("gst_number") or "").strip() or None
+
+        if not vendor_name:
+            raise serializers.ValidationError({"vendor_name": "Vendor name is required."})
+        if not phone:
+            raise serializers.ValidationError({"phone": "Phone number is required."})
+
+        attrs["vendor_name"] = vendor_name
+        attrs["phone"] = phone
+        attrs["email"] = email
+        attrs["gst_number"] = gst_number
         return attrs
 
 
