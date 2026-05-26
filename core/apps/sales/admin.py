@@ -42,7 +42,7 @@ class BillItemInline(admin.TabularInline):
 		"quantity",
 		"price",
 		"discount_percent",
-		"discount_amount",
+		"custom_amount",
 		"total_price",
 		"created_at",
 		"updated_at",
@@ -59,7 +59,7 @@ class BillAdminForm(forms.ModelForm):
 		widgets = {
 			"subtotal": forms.TextInput(attrs={"inputmode": "decimal"}),
 			"discount_percent": forms.TextInput(attrs={"inputmode": "decimal"}),
-			"discount_amount": forms.TextInput(attrs={"inputmode": "decimal"}),
+			"custom_amount": forms.TextInput(attrs={"inputmode": "decimal"}),
 			"total_amount": forms.TextInput(attrs={"inputmode": "decimal"}),
 			"paid_amount": forms.TextInput(attrs={"inputmode": "decimal"}),
 		}

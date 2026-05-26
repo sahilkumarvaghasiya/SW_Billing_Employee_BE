@@ -1,5 +1,4 @@
 from django.db import models
-from django.db.models.functions import Lower
 from datetime import timedelta
 from apps.shops.models import Shop
 from django.utils import timezone
@@ -24,10 +23,6 @@ class Vendor(models.Model):
 
     class Meta:
         constraints = [
-            models.UniqueConstraint(
-                Lower("name"), "shop",
-                name="unique_vendor_per_shop"
-            ),
             models.UniqueConstraint(
                 fields=["shop", "phone"],
                 name="unique_vendor_phone_per_shop"

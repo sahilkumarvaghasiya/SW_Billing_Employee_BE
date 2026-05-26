@@ -13,6 +13,7 @@ from apps.vendors.serializers import (
     VendorStockCreateSerializer,
     VendorExistingStockCreateSerializer,
     VendorListSerializer,
+    VendorValidationSerializer,
 )
 from apps.vendors.paginations import VendorListPagination, VendorStockHistoryPagination
 from apps.vendors.utils import (
@@ -120,26 +121,26 @@ class VendorStockCreateViewSet(viewsets.ModelViewSet):
         vendor_name = data["vendor_name"].strip().lower()
         vendor_phone = (data.get("phone") or "").strip()
         vendor_email = (data.get("email") or "").strip().lower() or None
-        vendor_gst = (data.get("gst_number") or "").strip()
+        vendor_gst = (data.get("gst_number") or "").strip() or None
         vendor_address = (data.get("vendor_address") or "").strip()
 
         try:
-            vendor, created = Vendor.objects.get_or_create(
+            existing_vendor = Vendor.objects.filter(
                 shop=shop,
-                name=vendor_name,
-                defaults={
-                    "phone": vendor_phone,
-                    "email": vendor_email,
-                    "gst_number": vendor_gst,
-                    "address": vendor_address,
-                    "is_active": True,
-                },
-            )
-
-            if not created:
+                phone__iexact=vendor_phone,
+            ).first()
+            if existing_vendor:
                 raise ValidationError({"vendor": "Vendor already exists."})
 
-            return vendor
+            return Vendor.objects.create(
+                shop=shop,
+                name=vendor_name,
+                phone=vendor_phone,
+                email=vendor_email,
+                gst_number=vendor_gst,
+                address=vendor_address,
+                is_active=True,
+            )
 
         except IntegrityError:
             raise ValidationError({"vendor": "Vendor already exists."})
@@ -154,9 +155,16 @@ class VendorStockCreateViewSet(viewsets.ModelViewSet):
             item_type = resolve_name_or_id(
                 ItemType, product_data["product_type"], shop, "product_type"
             )
-            company = resolve_name_or_id(
-                Company, product_data["company_name"], shop, "company_name"
-            )
+
+            company = None
+            company_value = product_data.get("company_name")
+            if company_value not in [None, ""]:
+                company = resolve_name_or_id(
+                    Company,
+                    company_value,
+                    shop,
+                    "company_name",
+                )
 
             product = Product.objects.create(
                 shop=shop,
@@ -193,7 +201,7 @@ class VendorStockCreateViewSet(viewsets.ModelViewSet):
                         barcode_image=image_db_path,
                         size=size,
                         color=color,
-                        original_price=variant["sellprice"],
+                        original_purchase_price=variant["purchase_price"],
                         price=variant["sellprice"],
                         quantity=variant["pieces"],
                         is_active=True,
@@ -204,7 +212,7 @@ class VendorStockCreateViewSet(viewsets.ModelViewSet):
 
             result.append(
                 {
-                    "company_name": product.company.name,
+                    "company_name": product.company.name if product.company else None,
                     "product_type": product.item_type.name,
                     "gender": gender,
                     "barcode_number": barcode_number,
@@ -273,9 +281,17 @@ class VendorExistingStockCreateViewSet(viewsets.ModelViewSet):
             item_type = resolve_name_or_id(
                 ItemType, product_data["product_type"], shop, "product_type"
             )
-            company = resolve_name_or_id(
-                Company, product_data["company_name"], shop, "company_name"
-            )
+
+            company = None
+            company_value = product_data.get("company_name")
+
+            if company_value not in [None, ""]:
+                company = resolve_name_or_id(
+                    Company,
+                    company_value,
+                    shop,
+                    "company_name",
+                )
 
             product = Product.objects.create(
                 shop=shop,
@@ -312,7 +328,7 @@ class VendorExistingStockCreateViewSet(viewsets.ModelViewSet):
                         barcode_image=image_db_path,
                         size=size,
                         color=color,
-                        original_price=variant["sellprice"],
+                        original_purchase_price=variant["purchase_price"],
                         price=variant["sellprice"],
                         quantity=variant["pieces"],
                         is_active=True,
@@ -323,7 +339,7 @@ class VendorExistingStockCreateViewSet(viewsets.ModelViewSet):
 
             result.append(
                 {
-                    "company_name": product.company.name,
+                    "company_name": product.company.name if product.company else None,
                     "product_type": product.item_type.name,
                     "gender": gender,
                     "barcode_number": barcode_number,
@@ -351,6 +367,52 @@ class VendorListViewSet(viewsets.ReadOnlyModelViewSet):
             queryset = queryset.filter(Q(name__icontains=search) | Q(phone__icontains=search))
 
         return queryset.order_by("-created_at")
+
+
+class VendorValidationViewSet(viewsets.ModelViewSet):
+    queryset = Vendor.objects.none()
+    permission_classes = [IsEmployee]
+    http_method_names = ["post"]
+
+    def create(self, request, *args, **kwargs):
+        serializer = VendorValidationSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        shop = request.user.shop
+        raw_vendor_name = data["vendor_name"].strip()
+        phone = data["phone"].strip()
+        email = data.get("email")
+        gst_number = data.get("gst_number")
+
+        match_query = Q(phone__iexact=phone)
+        if email:
+            match_query |= Q(email__iexact=email)
+        if gst_number:
+            match_query |= Q(gst_number__iexact=gst_number)
+
+        vendor = Vendor.objects.filter(shop=shop).filter(match_query).first()
+
+        if vendor:
+            return Response(
+                {
+                    "exists": True,
+                    "message": f"Vendor already exists. Use existing vendor list",
+                    "vendor": {
+                        "id": vendor.id,
+                        "name": vendor.name,
+                        "phone": vendor.phone,
+                        "email": vendor.email,
+                        "gst_number": vendor.gst_number,
+                    },
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        return Response(
+            {"exists": False, "message": "Vendor is available."},
+            status=status.HTTP_200_OK,
+        )
 
 
 
@@ -482,7 +544,7 @@ class VendorStockHistoryDetailsViewset(viewsets.ReadOnlyModelViewSet):
                 {
                     "size": v.size.name,
                     "color": v.color.name,
-                    "actual_price": v.original_price,
+                    "actual_price": v.original_purchase_price,
                     "quantity": v.quantity,
                 }
             )

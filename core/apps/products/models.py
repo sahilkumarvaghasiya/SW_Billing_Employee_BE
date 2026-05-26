@@ -142,7 +142,7 @@ class ProductVariant(models.Model):
     barcode_image = models.ImageField(upload_to="bar_codes/", null=True, blank=True)
     size = models.ForeignKey(Size, on_delete=models.SET_NULL, null=True, blank=True)
     color = models.ForeignKey(Color, on_delete=models.SET_NULL, null=True, blank=True)
-    original_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    original_purchase_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     price = models.DecimalField(max_digits=10, decimal_places=2)
     discount_percent = models.DecimalField(
         max_digits=5,
@@ -184,11 +184,6 @@ class ProductVariant(models.Model):
         final = price - discount
 
         return max(final, Decimal("0.00"))
-
-    def save(self, *args, **kwargs):
-        if self.original_price is None:
-            self.original_price = self.price
-        super().save(*args, **kwargs)
 
     def is_low_stock(self):
         return self.quantity <= self.low_stock_threshold
