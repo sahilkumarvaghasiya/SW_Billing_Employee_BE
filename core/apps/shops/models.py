@@ -15,6 +15,7 @@ class Shop(TenantMixin):
     updated_at = models.DateTimeField(auto_now=True)
 
     auto_create_schema = True
+    auto_drop_schema = True
 
     class Meta:
         verbose_name = "Shop"
@@ -26,12 +27,15 @@ class Shop(TenantMixin):
     def save(self, *args, **kwargs):
         if not self.schema_name:
             base = slugify(self.name)[:50] or "shop"
+            base = base.replace("-", "_")
             candidate = base
             suffix = 1
             while Shop.objects.exclude(pk=self.pk).filter(schema_name=candidate).exists():
                 suffix += 1
                 candidate = f"{base}{suffix}"
             self.schema_name = candidate
+        else:
+            self.schema_name = self.schema_name.lower().replace("-", "_")
         super().save(*args, **kwargs)
 
 
