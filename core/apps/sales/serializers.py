@@ -206,7 +206,7 @@ class BillItemCreateSerializer(serializers.Serializer):
 class BillCreateSerializer(serializers.Serializer):
     customer_name = serializers.CharField(max_length=120, required=False, allow_blank=True)
     phone = serializers.CharField(max_length=20)
-    address = serializers.CharField(required=False, allow_blank=True)
+    address = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     items = BillItemCreateSerializer(many=True)
     bill_discount_percent = serializers.DecimalField(max_digits=5, decimal_places=2, required=False, default=Decimal("0.00"))
     bill_custom_amount = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, default=Decimal("0.00"))
