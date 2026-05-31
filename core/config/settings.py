@@ -45,27 +45,43 @@ DEBUG = os.getenv("DEBUG", "False").lower() == "true"
 ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "").split(",")
 # Application definition
 
-INSTALLED_APPS = [
-    'django.contrib.admin',
-    'django.contrib.auth',
-    'django.contrib.contenttypes',
-    'django.contrib.sessions',
-    'django.contrib.messages',
-    'django.contrib.staticfiles',
-    'rest_framework_simplejwt.token_blacklist',
-    'rest_framework',
-    'corsheaders',
-    'phonenumber_field',
-    'apps.accounts',
-    'apps.products',
-    'apps.shops',
-    'apps.vendors',
-    'apps.sales'
-
+SHARED_APPS = [
+    "django_tenants",
+    "apps.shops",
+    "django.contrib.admin",
+    "django.contrib.auth",
+    "django.contrib.contenttypes",
+    "django.contrib.sessions",
+    "django.contrib.messages",
+    "django.contrib.staticfiles",
+    "rest_framework_simplejwt.token_blacklist",
+    "rest_framework",
+    "corsheaders",
+    "phonenumber_field",
+    "apps.accounts",
 ]
+
+TENANT_APPS = [
+    "django.contrib.contenttypes",
+    "apps.products",
+    "apps.vendors",
+    "apps.sales",
+]
+
+INSTALLED_APPS = list(SHARED_APPS) + [
+    app for app in TENANT_APPS if app not in SHARED_APPS
+]
+
+TENANT_MODEL = "shops.Shop"
+TENANT_DOMAIN_MODEL = "shops.Domain"
+DATABASE_ROUTERS = ("django_tenants.routers.TenantSyncRouter",)
+PUBLIC_SCHEMA_URLCONF = "core.config.urls"
+SHOW_PUBLIC_IF_NO_TENANT_FOUND = True
+TENANT_DOMAIN_SUFFIX = os.getenv("TENANT_DOMAIN_SUFFIX", "localhost").strip(".")
 
 
 MIDDLEWARE = [
+    "django_tenants.middleware.main.TenantMainMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -120,12 +136,15 @@ WSGI_APPLICATION = 'core.config.wsgi.application'
 # }
 
 
+_db_config = dj_database_url.parse(
+    os.getenv("DATABASE_URL"),
+    conn_max_age=600,
+    ssl_require=False,
+)
+_db_config["ENGINE"] = "django_tenants.postgresql_backend"
+
 DATABASES = {
-    "default": dj_database_url.parse(
-        os.getenv("DATABASE_URL"),
-        conn_max_age=600,
-        ssl_require=False
-    )
+    "default": _db_config,
 }
 MEDIA_URL = "/media/"
 MEDIA_ROOT = os.path.join(BASE_DIR, "media")

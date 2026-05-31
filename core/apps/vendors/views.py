@@ -25,7 +25,7 @@ from apps.vendors.utils import (
 from django.core.exceptions import ValidationError
 from apps.sales.utils import format_indian_amount
 
-def resolve_name_or_id(model_class, raw_value, shop, field_name="field"):
+def resolve_name_or_id(model_class, raw_value, field_name="field"):
     """
     Supports:
     - int → ID lookup
@@ -36,7 +36,7 @@ def resolve_name_or_id(model_class, raw_value, shop, field_name="field"):
         raise ValidationError({field_name: "Invalid value."})
 
     if isinstance(raw_value, int):
-        obj = model_class.objects.filter(id=raw_value, shop=shop).first()
+        obj = model_class.objects.filter(id=raw_value).first()
         if not obj:
             raise ValidationError({field_name: "Selected item does not exist."})
         return obj
@@ -46,7 +46,6 @@ def resolve_name_or_id(model_class, raw_value, shop, field_name="field"):
         raise ValidationError({field_name: "This field is required."})
 
     obj, _ = model_class.objects.get_or_create(
-        shop=shop,
         name=value.lower(),
     )
     return obj
@@ -85,12 +84,9 @@ class VendorStockCreateViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
 
-        shop = request.user.shop
-
-        vendor = self._get_or_create_vendor(shop, data)
+        vendor = self._get_or_create_vendor(data)
 
         stock_entry = StockEntry.objects.create(
-            shop=shop,
             vendor=vendor,
             total_amount=data["total_amount"],
             paid_amount=data["paid_amount"],
@@ -99,7 +95,7 @@ class VendorStockCreateViewSet(viewsets.ModelViewSet):
         )
 
         products = self._create_products(
-            data["products"], shop, stock_entry, request
+            data["products"], stock_entry, request
         )
 
         return Response(
@@ -117,7 +113,7 @@ class VendorStockCreateViewSet(viewsets.ModelViewSet):
         )
 
     
-    def _get_or_create_vendor(self, shop, data):
+    def _get_or_create_vendor(self, data):
         vendor_name = data["vendor_name"].strip().lower()
         vendor_phone = (data.get("phone") or "").strip()
         vendor_email = (data.get("email") or "").strip().lower() or None
@@ -126,14 +122,12 @@ class VendorStockCreateViewSet(viewsets.ModelViewSet):
 
         try:
             existing_vendor = Vendor.objects.filter(
-                shop=shop,
                 phone__iexact=vendor_phone,
             ).first()
             if existing_vendor:
                 raise ValidationError({"vendor": "Vendor already exists."})
 
             return Vendor.objects.create(
-                shop=shop,
                 name=vendor_name,
                 phone=vendor_phone,
                 email=vendor_email,
@@ -146,14 +140,14 @@ class VendorStockCreateViewSet(viewsets.ModelViewSet):
             raise ValidationError({"vendor": "Vendor already exists."})
 
    
-    def _create_products(self, products, shop, stock_entry, request):
+    def _create_products(self, products, stock_entry, request):
         result = []
 
         for product_data in products:
             gender = normalize_gender(product_data["gender"])
 
             item_type = resolve_name_or_id(
-                ItemType, product_data["product_type"], shop, "product_type"
+                ItemType, product_data["product_type"], "product_type"
             )
 
             company = None
@@ -162,12 +156,10 @@ class VendorStockCreateViewSet(viewsets.ModelViewSet):
                 company = resolve_name_or_id(
                     Company,
                     company_value,
-                    shop,
                     "company_name",
                 )
 
             product = Product.objects.create(
-                shop=shop,
                 name=item_type.name,
                 company=company,
                 gender=gender,
@@ -190,8 +182,8 @@ class VendorStockCreateViewSet(viewsets.ModelViewSet):
             variants_to_create = []
 
             for variant in product_data["item_variants"]:
-                size = resolve_name_or_id(Size, variant["size"], shop, "size")
-                color = resolve_name_or_id(Color, variant["colour"], shop, "colour")
+                size = resolve_name_or_id(Size, variant["size"], "size")
+                color = resolve_name_or_id(Color, variant["colour"], "colour")
 
                 variants_to_create.append(
                     ProductVariant(
@@ -235,17 +227,15 @@ class VendorExistingStockCreateViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
 
-        shop = request.user.shop
         vendor_id = kwargs.get("id")
 
         if not vendor_id:
             raise ValidationError({"vendor": "Vendor is required."})
 
-        vendor = get_object_or_404(Vendor, id=vendor_id, shop=shop)
+        vendor = get_object_or_404(Vendor, id=vendor_id)
 
 
         stock_entry = StockEntry.objects.create(
-            shop=shop,
             vendor=vendor,
             total_amount=data["total_amount"],
             paid_amount=data["paid_amount"],
@@ -254,7 +244,7 @@ class VendorExistingStockCreateViewSet(viewsets.ModelViewSet):
         )
 
         products = self._create_products(
-            data["products"], shop, stock_entry, request
+            data["products"], stock_entry, request
         )
 
         return Response(
@@ -272,14 +262,14 @@ class VendorExistingStockCreateViewSet(viewsets.ModelViewSet):
             status=status.HTTP_201_CREATED,
         )
 
-    def _create_products(self, products, shop, stock_entry, request):
+    def _create_products(self, products, stock_entry, request):
         result = []
 
         for product_data in products:
             gender = normalize_gender(product_data["gender"])
 
             item_type = resolve_name_or_id(
-                ItemType, product_data["product_type"], shop, "product_type"
+                ItemType, product_data["product_type"], "product_type"
             )
 
             company = None
@@ -289,12 +279,10 @@ class VendorExistingStockCreateViewSet(viewsets.ModelViewSet):
                 company = resolve_name_or_id(
                     Company,
                     company_value,
-                    shop,
                     "company_name",
                 )
 
             product = Product.objects.create(
-                shop=shop,
                 name=item_type.name,
                 company=company,
                 gender=gender,
@@ -317,8 +305,8 @@ class VendorExistingStockCreateViewSet(viewsets.ModelViewSet):
             variants_to_create = []
 
             for variant in product_data["item_variants"]:
-                size = resolve_name_or_id(Size, variant["size"], shop, "size")
-                color = resolve_name_or_id(Color, variant["colour"], shop, "colour")
+                size = resolve_name_or_id(Size, variant["size"], "size")
+                color = resolve_name_or_id(Color, variant["colour"], "colour")
 
                 variants_to_create.append(
                     ProductVariant(
@@ -361,7 +349,7 @@ class VendorListViewSet(viewsets.ReadOnlyModelViewSet):
         user = self.request.user
         search = (self.request.query_params.get("search") or "").strip()
 
-        queryset = Vendor.objects.filter(shop=user.shop, is_active=True)
+        queryset = Vendor.objects.filter(is_active=True)
 
         if search:
             queryset = queryset.filter(Q(name__icontains=search) | Q(phone__icontains=search))
@@ -379,8 +367,6 @@ class VendorValidationViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
 
-        shop = request.user.shop
-        raw_vendor_name = data["vendor_name"].strip()
         phone = data["phone"].strip()
         email = data.get("email")
         gst_number = data.get("gst_number")
@@ -391,7 +377,7 @@ class VendorValidationViewSet(viewsets.ModelViewSet):
         if gst_number:
             match_query |= Q(gst_number__iexact=gst_number)
 
-        vendor = Vendor.objects.filter(shop=shop).filter(match_query).first()
+        vendor = Vendor.objects.filter(match_query).first()
 
         if vendor:
             return Response(
@@ -429,10 +415,9 @@ class VendorStockHistoryListViewset(viewsets.ReadOnlyModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        shop = request.user.shop
-        vendor = get_object_or_404(Vendor, id=vendor_id, shop=shop)
+        vendor = get_object_or_404(Vendor, id=vendor_id)
 
-        queryset = StockEntry.objects.filter(shop=shop, vendor=vendor)
+        queryset = StockEntry.objects.filter(vendor=vendor)
 
         status_filter = request.query_params.get("status")
         start_date = request.query_params.get("start_date")
@@ -521,8 +506,7 @@ class VendorStockHistoryDetailsViewset(viewsets.ReadOnlyModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        shop = request.user.shop
-        stock_entry = get_object_or_404(StockEntry, stk_number=stk_number, shop=shop)
+        stock_entry = get_object_or_404(StockEntry, stk_number=stk_number)
 
         variants_qs = (
             stock_entry.stock_variants.select_related("product", "size", "color").order_by("-created_at")

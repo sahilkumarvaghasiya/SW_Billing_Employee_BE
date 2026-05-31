@@ -1,17 +1,12 @@
 from django.db import models
 from datetime import timedelta
-from apps.shops.models import Shop
 from django.utils import timezone
 import uuid
 
+from apps.shops.utils import get_current_tenant_id
+
 
 class Vendor(models.Model):
-    shop = models.ForeignKey(
-        Shop,
-        on_delete=models.CASCADE,
-        related_name="vendors"
-    )
-
     name = models.CharField(max_length=255, db_index=True)
     address = models.TextField(blank=True, null=True)
     phone = models.CharField(max_length=20, blank=True, null=True)
@@ -24,17 +19,16 @@ class Vendor(models.Model):
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=["shop", "phone"],
-                name="unique_vendor_phone_per_shop"
+                fields=["phone"],
+                name="unique_vendor_phone",
             ),
             models.UniqueConstraint(
-                fields=["shop", "gst_number"],
-                name="unique_vendor_gst_per_shop"
+                fields=["gst_number"],
+                name="unique_vendor_gst",
             ),
         ]
         indexes = [
-            models.Index(fields=["shop"]),
-            models.Index(fields=["shop", "name"]),
+            models.Index(fields=["name"]),
         ]
 
     def save(self, *args, **kwargs):
@@ -53,11 +47,6 @@ class StockEntry(models.Model):
         PAID = "paid", "Paid"
         UNPAID = "unpaid", "Unpaid"
 
-    shop = models.ForeignKey(
-        Shop,
-        on_delete=models.CASCADE,
-        related_name="stock_entries"
-    )
     vendor = models.ForeignKey(
         Vendor,
         on_delete=models.CASCADE,
@@ -82,7 +71,6 @@ class StockEntry(models.Model):
     class Meta:
         ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=["shop"]),
             models.Index(fields=["vendor"]),
             models.Index(fields=["status"]),
             models.Index(fields=["created_at"]),
@@ -91,7 +79,8 @@ class StockEntry(models.Model):
     def generate_stk_number(self):
         today = timezone.now().date()
         date_str = today.strftime("%Y%m%d")
-        return f"STK-{self.shop.id}-{date_str}-{uuid.uuid4().hex[:6].upper()}"
+        tenant_id = get_current_tenant_id() or "0"
+        return f"STK-{tenant_id}-{date_str}-{uuid.uuid4().hex[:6].upper()}"
 
     def clean(self):
         if self.total_amount < 0 or self.paid_amount < 0:
@@ -132,11 +121,6 @@ class StockEntry(models.Model):
         return self.due_date - timedelta(days=alert_before_days)
 
     def alert_first_display_date(self, alert_before_days=5):
-        """Return first date when alert should be visible.
-
-        Formula:
-            first_display = max(due_date - alert_before_days, entry_date) + 1 day
-        """
         if not self.due_date:
             return None
 
@@ -168,7 +152,7 @@ class StockEntry(models.Model):
         if target_date is None:
             target_date = timezone.localdate()
 
-        candidate_entries = cls.objects.select_related("vendor", "shop").filter(
+        candidate_entries = cls.objects.select_related("vendor").filter(
             due_date__isnull=False,
             is_fully_paid=False,
             due_date__gte=target_date,

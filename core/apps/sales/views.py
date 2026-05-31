@@ -64,7 +64,6 @@ class BarcodeProductLookupListView(viewsets.ReadOnlyModelViewSet):
             "product__item_type",
             "product__company",
         ).filter(
-            product__shop=self.request.user.shop,
             is_active=True,
             barcode_number=barcode_number,
         )
@@ -105,7 +104,6 @@ class CustomerLookupByPhoneViewSet(viewsets.ReadOnlyModelViewSet):
             raise ValidationError({"phone": ["Phone number is required."]})
 
         customer = Customer.objects.filter(
-            shop=request.user.shop,
             phone=phone,
             is_active=True,
         ).first()
@@ -121,7 +119,6 @@ class PaymentConfigQRListViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         return PaymentConfig.objects.filter(
-            shop=self.request.user.shop,
             is_active=True,
             qr_image__isnull=False,
         ).order_by("-created_at")
@@ -136,7 +133,6 @@ class TodaySummaryViewSet(viewsets.ReadOnlyModelViewSet):
         today = timezone.localdate()
         today_bills = Bill.objects.filter(
             created_by=request.user,
-            shop=request.user.shop,
             created_at__date=today,
         )
         paid_today_bills = today_bills.filter(payment_status=Bill.PaymentStatus.PAID)
@@ -199,7 +195,6 @@ class SalesHistoryListViewSet(viewsets.ReadOnlyModelViewSet):
             raise ValidationError({"date_range": ["start_date cannot be greater than end_date."]})
 
         queryset = Bill.objects.select_related("customer").filter(
-            shop=self.request.user.shop,
             is_active=True,
         )
 
@@ -234,7 +229,6 @@ class SalesHistoryDetailViewSet(viewsets.ReadOnlyModelViewSet):
         ).prefetch_related(
             "bill_items__product_variant__product__item_type",
         ).filter(
-            shop=self.request.user.shop,
             is_active=True,
         )
 
@@ -252,7 +246,6 @@ class BillCreateViewSet(viewsets.ModelViewSet):
         validated_data = serializer.validated_data
 
         customer, _ = Customer.objects.get_or_create(
-            shop=request.user.shop,
             phone=validated_data["phone"],
             defaults={
                 "name": validated_data.get("customer_name") or None,
@@ -275,7 +268,6 @@ class BillCreateViewSet(viewsets.ModelViewSet):
         selected_payment_config = validated_data.get("selected_payment_config")
 
         bill = Bill(
-            shop=request.user.shop,
             created_by=request.user,
             customer=customer,
             subtotal=validated_data["computed_subtotal"],
@@ -417,7 +409,7 @@ class NotificationUnreadListViewSet(viewsets.ReadOnlyModelViewSet):
 
     NOTIFICATION_AUTO_DELETE_AFTER = getattr(settings, 'NOTIFICATION_AUTO_DELETE_AFTER_HOURS', 48)
     def get_queryset(self):
-        purge_expired_notifications(shop_id=self.request.user.shop_id)
+        purge_expired_notifications()
 
         cutoff = timezone.now() - timedelta(
             hours=self.NOTIFICATION_AUTO_DELETE_AFTER
@@ -430,7 +422,6 @@ class NotificationUnreadListViewSet(viewsets.ReadOnlyModelViewSet):
 
         return (
             Notification.objects.filter(
-                shop=self.request.user.shop,
                 created_at__gte=cutoff,
             )
             .annotate(is_read=Exists(read_subquery))
@@ -461,8 +452,6 @@ class NotificationMarkSeenViewSet(viewsets.ModelViewSet):
 
         notifications = Notification.objects.exclude(
             read_statuses__user=request.user
-        ).filter(
-            shop=request.user.shop
         )
 
         read_objects = [

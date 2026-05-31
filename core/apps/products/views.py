@@ -21,12 +21,9 @@ class ProductVariantListView(viewsets.ReadOnlyModelViewSet):
     filterset_class = ProductVariantFilter
 
     def get_queryset(self):
-        user = self.request.user
-
         return ProductVariant.objects.select_related(
             "product", "size", "color", "product__item_type", "product__company"
         ).filter(
-            product__shop=user.shop,  
             is_active=True
         ).order_by("-created_at")
     
@@ -35,12 +32,9 @@ class ProductVariantDetailView(viewsets.ReadOnlyModelViewSet):
     permission_classes = [IsEmployee]
 
     def get_queryset(self):
-        user = self.request.user
-
         return ProductVariant.objects.select_related(
             "product", "size"
         ).filter(
-            product__shop=user.shop,
             is_active=True
         )
 
@@ -52,10 +46,9 @@ class SizeDropdownListView(viewsets.ReadOnlyModelViewSet):
     http_method_names = ["get"]
 
     def get_queryset(self):
-        user = self.request.user
         search = (self.request.query_params.get("search") or "").strip()
 
-        queryset = Size.objects.filter(shop=user.shop)
+        queryset = Size.objects.all()
 
         if search:
             queryset = queryset.filter(name__icontains=search)
@@ -70,10 +63,9 @@ class ItemTypeDropdownListView(viewsets.ReadOnlyModelViewSet):
     http_method_names = ["get"]
 
     def get_queryset(self):
-        user = self.request.user
         search = (self.request.query_params.get("search") or "").strip()
 
-        queryset = ItemType.objects.filter(shop=user.shop)
+        queryset = ItemType.objects.all()
 
         if search:
             queryset = queryset.filter(name__icontains=search)
@@ -88,10 +80,9 @@ class ColorDropdownListView(viewsets.ReadOnlyModelViewSet):
     http_method_names = ["get"]
 
     def get_queryset(self):
-        user = self.request.user
         search = (self.request.query_params.get("search") or "").strip()
 
-        queryset = Color.objects.filter(shop=user.shop)
+        queryset = Color.objects.all()
 
         if search:
             queryset = queryset.filter(name__icontains=search)
@@ -106,10 +97,9 @@ class BrandDropdownListView(viewsets.ReadOnlyModelViewSet):
     http_method_names = ["get"]
 
     def get_queryset(self):
-        user = self.request.user
         search = (self.request.query_params.get("search") or "").strip()
 
-        queryset = Company.objects.filter(shop=user.shop)
+        queryset = Company.objects.all()
 
         if search:
             queryset = queryset.filter(name__icontains=search)

@@ -1,13 +1,14 @@
 from django.contrib import admin
-from apps.vendors.models import Vendor, StockEntry
 
+from apps.shops.admin_mixins import TenantSchemaAdminMixin
+from apps.vendors.models import StockEntry, Vendor
 
 
 @admin.register(Vendor)
-class VendorAdmin(admin.ModelAdmin):
+class VendorAdmin(TenantSchemaAdminMixin, admin.ModelAdmin):
     list_display = ("id", "name")
- 
+
 
 @admin.register(StockEntry)
-class StockEntryAdmin(admin.ModelAdmin):
-    list_display = ("id", "vendor")
+class StockEntryAdmin(TenantSchemaAdminMixin, admin.ModelAdmin):
+    list_display = ("id", "vendor", "stk_number", "status")

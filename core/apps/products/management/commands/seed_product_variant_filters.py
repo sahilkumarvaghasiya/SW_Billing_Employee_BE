@@ -5,9 +5,10 @@ from decimal import Decimal
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django.utils import timezone
+from django_tenants.utils import tenant_context
 
 from apps.shops.models import Shop
-from apps.products.models import Product, ProductVariant, Size, Color, ItemType
+from apps.products.models import Product, ProductVariant, Size, Color, ItemType, Company
 from apps.vendors.models import Vendor, StockEntry
 
 
@@ -50,11 +51,16 @@ class Command(BaseCommand):
             help="Delete previous dummy records created by this command for the selected shop.",
         )
 
-    @transaction.atomic
     def handle(self, *args, **options):
         random.seed(options["seed"])
 
         shop = self._resolve_shop(options.get("shop_id"))
+
+        with tenant_context(shop):
+            self._seed_tenant_data(options, shop)
+
+    @transaction.atomic
+    def _seed_tenant_data(self, options, shop):
         variants_per_gender = options["variants_per_gender"]
         days_span = options["days_span"]
 
@@ -66,10 +72,10 @@ class Command(BaseCommand):
         if options["clear"]:
             self._clear_previous_dummy_data(shop)
 
-        sizes = self._get_or_create_sizes(shop)
-        colors = self._get_or_create_colors(shop)
-        item_types = self._get_or_create_item_types(shop)
-        stock_entries = self._get_or_create_stock_entries(shop)
+        sizes = self._get_or_create_sizes()
+        colors = self._get_or_create_colors()
+        item_types = self._get_or_create_item_types()
+        stock_entries = self._get_or_create_stock_entries()
 
         keyword_pool = [
             "alpha",
@@ -90,13 +96,14 @@ class Command(BaseCommand):
             for idx in range(1, variants_per_gender + 1):
                 keyword = random.choice(keyword_pool)
                 item_type = random.choice(item_types)
-                company_name = f"{DUMMY_TAG} {keyword} textiles {gender}"
+                company, _ = Company.objects.get_or_create(
+                    name=f"{DUMMY_TAG} {keyword} textiles {gender}".lower(),
+                )
                 product_name = f"{DUMMY_TAG} {gender} product {idx} {keyword}"
 
                 product = Product.objects.create(
-                    shop=shop,
                     name=product_name,
-                    company_name=company_name,
+                    company=company,
                     gender=gender,
                     item_type=item_type,
                     description=f"Seeded product for {gender} filter testing",
@@ -149,7 +156,7 @@ class Command(BaseCommand):
         return shop
 
     def _clear_previous_dummy_data(self, shop):
-        products = Product.objects.filter(shop=shop, name__icontains=DUMMY_TAG)
+        products = Product.objects.filter(name__icontains=DUMMY_TAG)
         variants_deleted, _ = ProductVariant.objects.filter(product__in=products).delete()
         products_deleted, _ = products.delete()
         self.stdout.write(
@@ -159,33 +166,32 @@ class Command(BaseCommand):
             )
         )
 
-    def _get_or_create_sizes(self, shop):
+    def _get_or_create_sizes(self):
         size_names = ["xs", "s", "m", "l", "xl", "xxl"]
         sizes = []
         for name in size_names:
-            size, _ = Size.objects.get_or_create(name=name, shop=shop)
+            size, _ = Size.objects.get_or_create(name=name)
             sizes.append(size)
         return sizes
 
-    def _get_or_create_colors(self, shop):
+    def _get_or_create_colors(self):
         color_names = ["black", "white", "blue", "red", "green", "beige"]
         colors = []
         for name in color_names:
-            color, _ = Color.objects.get_or_create(name=name, shop=shop)
+            color, _ = Color.objects.get_or_create(name=name)
             colors.append(color)
         return colors
 
-    def _get_or_create_item_types(self, shop):
+    def _get_or_create_item_types(self):
         type_names = ["shirt", "jeans", "kurta", "tshirt", "hoodie"]
         item_types = []
         for name in type_names:
-            item_type, _ = ItemType.objects.get_or_create(name=name, shop=shop)
+            item_type, _ = ItemType.objects.get_or_create(name=name)
             item_types.append(item_type)
         return item_types
 
-    def _get_or_create_stock_entries(self, shop):
+    def _get_or_create_stock_entries(self):
         vendor, _ = Vendor.objects.get_or_create(
-            shop=shop,
             name=f"{DUMMY_TAG.lower()} vendor",
             defaults={
                 "address": "Seed Address",
@@ -196,7 +202,6 @@ class Command(BaseCommand):
 
         stock_entries = list(
             StockEntry.objects.filter(
-                shop=shop,
                 vendor=vendor,
                 notes__startswith=DUMMY_TAG,
             ).order_by("id")[:4]
@@ -204,7 +209,6 @@ class Command(BaseCommand):
 
         for i in range(len(stock_entries) + 1, 5):
             entry = StockEntry(
-                shop=shop,
                 vendor=vendor,
                 total_amount=Decimal("10000.00") + Decimal(str(i * 750)),
                 paid_amount=Decimal("5000.00"),

@@ -1,54 +1,54 @@
 from django.contrib import admin
-from apps.products.models import Product, ProductVariant, Size, Company, ItemType, Color
+
+from apps.products.models import Color, Company, ItemType, Product, ProductVariant, Size
+from apps.shops.admin_mixins import TenantSchemaAdminMixin
 
 
 @admin.register(Company)
-class CompanyAdmin(admin.ModelAdmin):
-    list_display = ("id", "name", "shop", "created_at")
+class CompanyAdmin(TenantSchemaAdminMixin, admin.ModelAdmin):
+    list_display = ("id", "name", "created_at")
     search_fields = ("name",)
-    list_filter = ("shop",)
     ordering = ("name",)
+
 
 @admin.register(ItemType)
-class ItemTypeAdmin(admin.ModelAdmin):
-    list_display = ("id", "name", "shop", "created_at")
+class ItemTypeAdmin(TenantSchemaAdminMixin, admin.ModelAdmin):
+    list_display = ("id", "name", "created_at")
     search_fields = ("name",)
-    list_filter = ("shop",)
     ordering = ("name",)
 
+
 @admin.register(Color)
-class ColorAdmin(admin.ModelAdmin):
-    list_display = ("id", "name", "shop", "created_at")
+class ColorAdmin(TenantSchemaAdminMixin, admin.ModelAdmin):
+    list_display = ("id", "name", "created_at")
     search_fields = ("name",)
-    list_filter = ("shop",)
     ordering = ("name",)
+
+
 @admin.register(Size)
-class SizeAdmin(admin.ModelAdmin):
-    list_display = ("id", "name", "shop", "created_at")
+class SizeAdmin(TenantSchemaAdminMixin, admin.ModelAdmin):
+    list_display = ("id", "name", "created_at")
     search_fields = ("name",)
-    list_filter = ("shop",)
     ordering = ("name",)
 
 
 @admin.register(Product)
-class ProductAdmin(admin.ModelAdmin):
+class ProductAdmin(TenantSchemaAdminMixin, admin.ModelAdmin):
     list_display = (
         "id",
         "name",
         "company",
-        "shop",
         "gender",
         "is_active",
         "created_at",
     )
     search_fields = ("name", "company")
-    list_filter = ("shop", "gender", "is_active")
+    list_filter = ("gender", "is_active")
     ordering = ("-created_at",)
 
 
-
 @admin.register(ProductVariant)
-class ProductVariantAdmin(admin.ModelAdmin):
+class ProductVariantAdmin(TenantSchemaAdminMixin, admin.ModelAdmin):
     list_display = (
         "id",
         "product",
@@ -67,7 +67,6 @@ class ProductVariantAdmin(admin.ModelAdmin):
         "product__company__name",
     )
     list_filter = (
-        "product__shop",
         "size",
         "is_active",
     )

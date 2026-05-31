@@ -217,7 +217,6 @@ class BillCreateSerializer(serializers.Serializer):
 
     def validate(self, attrs):
         request = self.context["request"]
-        shop = request.user.shop
 
         phone = (attrs.get("phone") or "").strip()
         if not phone:
@@ -249,18 +248,16 @@ class BillCreateSerializer(serializers.Serializer):
         if selected_payment_config_id:
             payment_config = PaymentConfig.objects.filter(
                 id=selected_payment_config_id,
-                shop=shop,
                 is_active=True,
             ).first()
             if not payment_config:
                 raise serializers.ValidationError(
-                    {"selected_payment_config_id": ["Invalid or inactive payment config for this shop."]}
+                    {"selected_payment_config_id": ["Invalid or inactive payment config."]}
                 )
 
         item_variant_ids = [item["product_variant_id"] for item in attrs["items"]]
         variants = ProductVariant.objects.select_related("product").filter(
             id__in=item_variant_ids,
-            product__shop=shop,
             is_active=True,
         )
 
@@ -268,7 +265,7 @@ class BillCreateSerializer(serializers.Serializer):
         missing_variant_ids = [variant_id for variant_id in item_variant_ids if variant_id not in variant_map]
         if missing_variant_ids:
             raise serializers.ValidationError(
-                {"items": [f"Invalid product_variant_id(s) for this shop: {missing_variant_ids}"]}
+                {"items": [f"Invalid product_variant_id(s): {missing_variant_ids}"]}
             )
 
         subtotal = Decimal("0.00")

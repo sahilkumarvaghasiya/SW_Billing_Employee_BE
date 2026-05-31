@@ -1,8 +1,26 @@
+from django.db import connection
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.exceptions import AuthenticationFailed
 
 
 class SingleDeviceJWTAuthentication(JWTAuthentication):
+
+    def authenticate(self, request):
+        header = self.get_header(request)
+        if header is None:
+            return None
+
+        raw_token = self.get_raw_token(header)
+        if raw_token is None:
+            return None
+
+        validated_token = self.get_validated_token(raw_token)
+        user = self.get_user(validated_token)
+
+        if user.shop_id:
+            connection.set_tenant(user.shop)
+
+        return user, validated_token
 
     def get_user(self, validated_token):
         user = super().get_user(validated_token)

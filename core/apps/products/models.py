@@ -1,14 +1,13 @@
 from django.db import models
 from decimal import Decimal
-from apps.shops.models import Shop
 from django.conf import settings
 
 
 class NameMixin(models.Model):
     name = models.CharField(max_length=100, blank=True, null=True)
-    shop = models.ForeignKey(Shop, on_delete=models.CASCADE, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
     class Meta:
         abstract = True
 
@@ -22,12 +21,9 @@ class Color(NameMixin):
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=["name", "shop"],
-                name="unique_color_per_shop"
+                fields=["name"],
+                name="unique_color_name",
             )
-        ]
-        indexes = [
-            models.Index(fields=["shop"]),
         ]
 
     def __str__(self):
@@ -39,44 +35,37 @@ class Size(NameMixin):
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=["name", "shop"],
-                name="unique_size_per_shop"
+                fields=["name"],
+                name="unique_size_name",
             )
-        ]
-        indexes = [
-            models.Index(fields=["shop"]),
         ]
 
     def __str__(self):
         return self.name
+
 
 class Company(NameMixin):
 
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=["name", "shop"],
-                name="unique_company_per_shop"
+                fields=["name"],
+                name="unique_company_name",
             )
-        ]
-        indexes = [
-            models.Index(fields=["shop"]),
         ]
 
     def __str__(self):
         return self.name
+
 
 class ItemType(NameMixin):
 
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=["name", "shop"],
-                name="unique_itemtype_per_shop"
+                fields=["name"],
+                name="unique_itemtype_name",
             )
-        ]
-        indexes = [
-            models.Index(fields=["shop"]),
         ]
 
     def __str__(self):
@@ -91,7 +80,6 @@ class Product(models.Model):
         BOY = 'boy', 'Boy'
         GIRL = 'girl', 'Girl'
 
-    shop = models.ForeignKey(Shop, on_delete=models.CASCADE, related_name="products")
     name = models.CharField(max_length=255, null=True, blank=True)
     company = models.ForeignKey(
         Company,
@@ -114,8 +102,7 @@ class Product(models.Model):
     class Meta:
         ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=["shop"]),
-            models.Index(fields=["shop", "created_at"]),
+            models.Index(fields=["created_at"]),
             models.Index(fields=["company"]),
             models.Index(fields=["gender"]),
             models.Index(fields=["item_type"]),

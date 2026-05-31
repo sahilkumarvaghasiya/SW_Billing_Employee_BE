@@ -5,12 +5,11 @@ from django.db.models import Sum
 from django.core.validators import MinValueValidator
 from django.utils import timezone
 from apps.products.models import ProductVariant
-from apps.shops.models import Shop
 from apps.accounts.models import User
+from apps.shops.utils import get_current_tenant_id
 
 
 class Customer(models.Model):
-    shop = models.ForeignKey(Shop, on_delete=models.CASCADE, related_name="customers")
     phone = models.CharField(max_length=20)
     name = models.CharField(max_length=120, blank=True, null=True)
     address = models.TextField(blank=True, null=True)
@@ -20,10 +19,10 @@ class Customer(models.Model):
 
     class Meta:
         constraints = [
-            models.UniqueConstraint(fields=["shop", "phone"], name="unique_customer_phone_per_shop"),
+            models.UniqueConstraint(fields=["phone"], name="unique_customer_phone"),
         ]
         indexes = [
-            models.Index(fields=["shop", "phone"]),
+            models.Index(fields=["phone"]),
         ]
 
     def save(self, *args, **kwargs):
@@ -40,7 +39,6 @@ class Customer(models.Model):
 
 class PaymentConfig(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    shop = models.ForeignKey(Shop, on_delete=models.CASCADE, related_name="payment_configs")
     name = models.CharField(max_length=100)
     qr_image = models.ImageField(upload_to="qr_codes/", blank=True, null=True)
     is_active = models.BooleanField(default=True)
@@ -50,7 +48,7 @@ class PaymentConfig(models.Model):
     class Meta:
         db_table = "billing_payment_configs"
         indexes = [
-            models.Index(fields=["shop", "is_active"]),
+            models.Index(fields=["is_active"]),
         ]
 
     def __str__(self):
@@ -69,7 +67,6 @@ class Bill(models.Model):
         FAILED = "failed", "Failed"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    shop = models.ForeignKey(Shop, on_delete=models.PROTECT, related_name="bills")
     created_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name="created_bills")
     customer = models.ForeignKey(
         Customer,
@@ -105,7 +102,6 @@ class Bill(models.Model):
         db_table = "billing_bills"
         ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=["shop"]),
             models.Index(fields=["created_by"]),
             models.Index(fields=["payment_status"]),
             models.Index(fields=["created_at"]),
@@ -118,8 +114,8 @@ class Bill(models.Model):
     def generate_bill_number(self):
         today = timezone.now().date()
         date_str = today.strftime("%Y%m%d")
-
-        return f"BILL-{date_str}-{self.shop.id}-{uuid.uuid4().hex[:6].upper()}"
+        tenant_id = get_current_tenant_id() or "0"
+        return f"BILL-{date_str}-{tenant_id}-{uuid.uuid4().hex[:6].upper()}"
 
     @staticmethod
     def _to_money(value):
@@ -190,7 +186,6 @@ class Notification(models.Model):
         MEDIUM = "medium", "Medium"
         HIGH = "high", "High"
 
-    shop = models.ForeignKey(Shop, on_delete=models.CASCADE, related_name="notifications")
     type = models.CharField(max_length=30, choices=Type.choices, db_index=True)
     title = models.CharField(max_length=120)
     message = models.TextField()
@@ -215,12 +210,12 @@ class Notification(models.Model):
     class Meta:
         ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=["shop", "created_at"]),
-            models.Index(fields=["shop", "type"]),
+            models.Index(fields=["created_at"]),
+            models.Index(fields=["type"]),
         ]
 
     def __str__(self):
-        return f"{self.get_type_display()} - {self.shop_id}"
+        return f"{self.get_type_display()}"
 
 
 
