@@ -12,7 +12,6 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 
 from pathlib import Path
 from datetime import timedelta
-from celery.schedules import crontab
 import sys
 import dj_database_url
 import os 
@@ -199,33 +198,11 @@ SIMPLE_JWT = {
     ),
 }
 
-
-# CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://127.0.0.1:6379/0")
-# CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", CELERY_BROKER_URL)
-
-
-CELERY_BROKER_URL = os.getenv("REDIS_URL")
-CELERY_RESULT_BACKEND = os.getenv("REDIS_URL")
-CELERY_TIMEZONE = TIME_ZONE
-CELERY_ENABLE_UTC = True
-
-CELERY_IGNORE_RESULT = True
-CELERY_RESULT_EXPIRES = 3600
-
-CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
-
-CELERY_ACCEPT_CONTENT = ["json"]
-CELERY_TASK_SERIALIZER = "json"
-CELERY_RESULT_SERIALIZER = "json"
+# Vendor due alerts: schedule via Railway Cron (or similar), e.g. daily 08:00 Asia/Kolkata:
+#   python manage.py process_vendor_payment_due_alerts
+# Railway cron (UTC): 30 2 * * *
 
 VENDOR_DUE_ALERT_DAYS_BEFORE = int(os.getenv("VENDOR_DUE_ALERT_DAYS_BEFORE", "5"))
 NOTIFICATION_AUTO_DELETE_AFTER_HOURS = int(os.getenv("NOTIFICATION_AUTO_DELETE_AFTER_HOURS", "48"))
 LOW_STOCK_THRESHOLD = int(os.getenv("LOW_STOCK_THRESHOLD", 20))
 LOW_STOCK_PRE_ALERT_BUFFER = int(os.getenv("LOW_STOCK_PRE_ALERT_BUFFER", 10))
-
-CELERY_BEAT_SCHEDULE = {
-    "vendor-payment-due-alerts-every-morning": {
-        "task": "apps.vendors.tasks.process_vendor_payment_due_alerts",
-        "schedule": crontab(hour=8, minute=0), # every day at 8:00 AM
-    },
-}
