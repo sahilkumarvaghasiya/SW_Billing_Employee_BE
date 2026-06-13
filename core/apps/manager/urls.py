@@ -1,22 +1,31 @@
 from django.urls import path
+from apps.manager.views import (
+    ManagerBillsViewSet,
+    ManagerEmployeeCreateViewSet,
+    ManagerEmployeeLimitViewSet,
+    ManagerEmployeeListViewSet,
+    ManagerEmployeeManageViewSet,
+    ManagerOverviewViewSet,
+    ManagerStaffPerformanceViewSet,
+)
 
-from apps.manager import views
 
 urlpatterns = [
-    path("users", views.ManagerUsersListCreateView.as_view()),
-    path("users/<int:user_id>/status", views.ManagerUserStatusView.as_view()),
-    path("users/performance", views.ManagerStaffPerformanceView.as_view()),
-    path("overview", views.ManagerOverviewView.as_view()),
-    path("overview/sales", views.ManagerOverviewSalesView.as_view()),
-    path("bills", views.ManagerBillsView.as_view()),
-    path("activity", views.ManagerActivityView.as_view()),
-    path("stock/items", views.ManagerStockListView.as_view()),
-    path("stock/items/<int:item_id>", views.ManagerStockDetailView.as_view()),
-    path("reports", views.ManagerReportsView.as_view()),
-    path("alerts", views.ManagerAlertsView.as_view()),
-    path("payment-configs", views.ManagerPaymentConfigListCreateView.as_view()),
+    path("overview/", ManagerOverviewViewSet.as_view({"get": "list"})),
+    path("overview/bills/", ManagerBillsViewSet.as_view({"get": "list"})),
+    path("employees/", ManagerEmployeeCreateViewSet.as_view({"post": "create"})),
+    path("employees/list/", ManagerEmployeeListViewSet.as_view({"get": "list"})),
     path(
-        "payment-configs/<uuid:config_id>",
-        views.ManagerPaymentConfigDetailView.as_view(),
+        "staff-performance/",
+        ManagerStaffPerformanceViewSet.as_view({"get": "list"}),
+    ),
+    path("employees/limit/", ManagerEmployeeLimitViewSet.as_view({"get": "list"})),
+    path(
+        "employees/<int:pk>/block/",
+        ManagerEmployeeManageViewSet.as_view({"patch": "partial_update"}),
+    ),
+    path(
+        "employees/<int:pk>/delete/",
+        ManagerEmployeeManageViewSet.as_view({"delete": "destroy"}),
     ),
 ]

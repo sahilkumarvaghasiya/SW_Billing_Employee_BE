@@ -1,505 +1,369 @@
+from datetime import datetime
 from decimal import Decimal
-
-from django.db.models import Count, Sum
-from django.db.models.functions import TruncDate
+from django.db import transaction
+from django.db.models import Count, Q, Sum
+from django.db.models.functions import TruncDate, TruncMonth, TruncYear
 from django.utils import timezone
-from rest_framework import status
-from rest_framework.parsers import FormParser, MultiPartParser
+from rest_framework import status, viewsets
+from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
-from rest_framework.views import APIView
-
-from apps.accounts.models import User
+from apps.manager.pagination import ManagerBillsPagination, ManagerEmployeesPagination
 from apps.manager.permissions import IsManager
 from apps.manager.serializers import (
-    CreateDashboardUserSerializer,
-    DashboardUserSerializer,
-    PaymentConfigSerializer,
-    PaymentConfigWriteSerializer,
-    StockItemSerializer,
-    StockUpdateSerializer,
-    UserStatusSerializer,
-    timezone_format,
+    ManagerBillListSerializer,
+    ManagerEmployeeBlockSerializer,
+    ManagerEmployeeCreateSerializer,
+    ManagerEmployeeListSerializer,
 )
-from apps.manager.utils import format_inr, parse_date_range
-from apps.products.models import ProductVariant
-from apps.sales.models import Bill, BillItem, Notification, PaymentConfig
+from apps.accounts.models import User
+from apps.sales.models import Bill, BillItem
+from apps.sales.utils import format_indian_amount
 
 
-class ManagerUsersListCreateView(APIView):
+class ManagerOverviewViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [IsManager]
+    http_method_names = ["get"]
+    queryset = Bill.objects.none()
 
-    def get(self, request):
-        shop = request.user.shop
-        users = shop.users.exclude(id=request.user.id).order_by("-date_joined")
-        data = DashboardUserSerializer(users, many=True).data
-        return Response(data)
+    def list(self, request, *args, **kwargs):
+        params = request.query_params
 
-    def post(self, request):
-        serializer = CreateDashboardUserSerializer(
+        start_date_param = (params.get("start_date") or "").strip()
+        end_date_param = (params.get("end_date") or "").strip()
+
+        today = timezone.localdate()
+
+        if start_date_param:
+            try:
+                start_date = datetime.strptime(start_date_param, "%d-%m-%Y").date()
+            except ValueError as exc:
+                raise ValidationError(
+                    {"start_date": ["Invalid date format. Use DD-MM-YYYY."]}
+                ) from exc
+        else:
+            start_date = today
+
+        if end_date_param:
+            try:
+                end_date = datetime.strptime(end_date_param, "%d-%m-%Y").date()
+            except ValueError as exc:
+                raise ValidationError(
+                    {"end_date": ["Invalid date format. Use DD-MM-YYYY."]}
+                ) from exc
+        else:
+            end_date = today
+
+        if start_date > end_date:
+            raise ValidationError(
+                {"date_range": ["start_date cannot be greater than end_date."]}
+            )
+
+        bills = Bill.objects.filter(
+            payment_status=Bill.PaymentStatus.PAID,
+            created_at__date__gte=start_date,
+            created_at__date__lte=end_date,
+        )
+
+        bill_agg = bills.aggregate(
+            revenue=Sum("total_amount"),
+            bill_count=Count("id"),
+        )
+        revenue = bill_agg["revenue"] or Decimal("0.00")
+        bill_count = bill_agg["bill_count"] or 0
+
+        average_revenue = (revenue / bill_count) if bill_count else Decimal("0.00")
+
+        total_products_sold = (
+            BillItem.objects.filter(bill__in=bills).aggregate(total=Sum("quantity"))[
+                "total"
+            ]
+            or 0
+        )
+        average_products_sold = (total_products_sold / bill_count) if bill_count else 0
+
+        revenue_trend = self._build_revenue_trend(bills, start_date, end_date)
+
+        return Response(
+            {
+                "start_date": start_date.strftime("%d-%m-%Y"),
+                "end_date": end_date.strftime("%d-%m-%Y"),
+                "revenue": format_indian_amount(revenue),
+                "total_bills": bill_count,
+                "average_revenue": format_indian_amount(average_revenue),
+                "average_products_sold": round(float(average_products_sold), 2),
+                "revenue_trend": revenue_trend,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    def _build_revenue_trend(self, bills, start_date, end_date):
+        total_days = (end_date - start_date).days + 1
+
+        if total_days <= 31:
+            granularity = "daily"
+            trunc = TruncDate("created_at")
+            label_format = "%d-%m-%Y"
+        elif total_days <= 730:
+            granularity = "monthly"
+            trunc = TruncMonth("created_at")
+            label_format = "%m-%Y"
+        else:
+            granularity = "yearly"
+            trunc = TruncYear("created_at")
+            label_format = "%Y"
+
+        rows = (
+            bills.annotate(period=trunc)
+            .values("period")
+            .annotate(revenue=Sum("total_amount"))
+            .order_by("period")
+        )
+
+        points = [
+            {
+                "label": row["period"].strftime(label_format),
+                "revenue": format_indian_amount(row["revenue"] or Decimal("0.00")),
+            }
+            for row in rows
+            if row["period"] is not None
+        ]
+
+        return {
+            "granularity": granularity,
+            "points": points,
+        }
+
+
+class ManagerBillsViewSet(viewsets.ReadOnlyModelViewSet):
+    permission_classes = [IsManager]
+    serializer_class = ManagerBillListSerializer
+    pagination_class = ManagerBillsPagination
+    http_method_names = ["get"]
+
+    def get_queryset(self):
+        params = self.request.query_params
+
+        start_date_param = (params.get("start_date") or "").strip()
+        end_date_param = (params.get("end_date") or "").strip()
+        search = (params.get("search") or "").strip()
+
+        queryset = Bill.objects.select_related("customer", "created_by").filter(
+            is_active=True,
+        )
+
+        if start_date_param:
+            try:
+                start_date = datetime.strptime(start_date_param, "%d-%m-%Y").date()
+            except ValueError as exc:
+                raise ValidationError(
+                    {"start_date": ["Invalid date format. Use DD-MM-YYYY."]}
+                ) from exc
+            queryset = queryset.filter(created_at__date__gte=start_date)
+
+        if end_date_param:
+            try:
+                end_date = datetime.strptime(end_date_param, "%d-%m-%Y").date()
+            except ValueError as exc:
+                raise ValidationError(
+                    {"end_date": ["Invalid date format. Use DD-MM-YYYY."]}
+                ) from exc
+            queryset = queryset.filter(created_at__date__lte=end_date)
+
+        if search:
+            queryset = queryset.filter(
+                Q(bill_number__icontains=search)
+                | Q(created_by__username__icontains=search)
+            )
+
+        return queryset.order_by("-created_at")
+
+
+class ManagerEmployeeCreateViewSet(viewsets.ViewSet):
+    permission_classes = [IsManager]
+    http_method_names = ["post"]
+
+    def create(self, request, *args, **kwargs):
+        serializer = ManagerEmployeeCreateSerializer(
             data=request.data,
             context={"request": request},
         )
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
+
         return Response(
-            DashboardUserSerializer(user).data,
+            {
+                "id": user.id,
+                "name": user.username,
+                "email": user.email,
+                "phone_number": user.phone_number,
+                "role": user.role,
+                "password": serializer._generated_password,
+            },
             status=status.HTTP_201_CREATED,
         )
 
 
-class ManagerUserStatusView(APIView):
+class ManagerEmployeeLimitViewSet(viewsets.ViewSet):
     permission_classes = [IsManager]
+    http_method_names = ["get"]
 
-    def patch(self, request, user_id):
+    def list(self, request, *args, **kwargs):
         shop = request.user.shop
-        try:
-            user = shop.users.get(pk=user_id)
-        except User.DoesNotExist:
-            return Response({"detail": "User not found."}, status=404)
+        total_limit = shop.employee_limit
+        used = shop.users.filter(role=User.Role.EMPLOYEE).count()
+        remaining = max(total_limit - used, 0)
 
-        if user.role == User.Role.MANAGER and user.id != request.user.id:
+        return Response(
+            {
+                "employee_limit": total_limit,
+                "used": used,
+                "remaining": remaining,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class ManagerEmployeeListViewSet(viewsets.ReadOnlyModelViewSet):
+    permission_classes = [IsManager]
+    serializer_class = ManagerEmployeeListSerializer
+    pagination_class = ManagerEmployeesPagination
+    http_method_names = ["get"]
+
+    def get_queryset(self):
+        return self.request.user.shop.users.filter(role=User.Role.EMPLOYEE).order_by(
+            "-date_joined"
+        )
+
+
+class ManagerEmployeeManageViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsManager]
+    serializer_class = ManagerEmployeeListSerializer
+    http_method_names = ["patch", "delete"]
+
+    def get_queryset(self):
+        return self.request.user.shop.users.filter(role=User.Role.EMPLOYEE)
+
+    def partial_update(self, request, *args, **kwargs):
+        employee = self.get_object()
+
+        serializer = ManagerEmployeeBlockSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        is_blocked = serializer.validated_data["is_blocked"]
+
+        employee.is_blocked = is_blocked
+        employee.save()
+
+        message = (
+            "User blocked successfully."
+            if is_blocked
+            else "User unblocked successfully."
+        )
+        return Response({"message": message}, status=status.HTTP_200_OK)
+
+    def destroy(self, request, *args, **kwargs):
+        employee = self.get_object()
+
+        force = str(
+            request.query_params.get("force") or request.data.get("force") or ""
+        ).strip().lower() in ("1", "true", "yes")
+
+        employee_bills = Bill.objects.filter(created_by_id=employee.pk)
+        bills_count = employee_bills.count()
+
+        if bills_count and not force:
             return Response(
-                {"detail": "Cannot change status of another manager."},
-                status=400,
+                {
+                    "requires_confirmation": True,
+                    "bills_count": bills_count,
+                    "detail": (
+                        f"This employee has created {bills_count} bill(s). "
+                        "Deleting will also permanently delete all of their bills. "
+                        "Confirm to continue."
+                    ),
+                },
+                status=status.HTTP_409_CONFLICT,
             )
 
-        serializer = UserStatusSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        is_active = serializer.validated_data["status"] == "active"
-        user.is_blocked = not is_active
-        user.is_active = is_active
-        user.save(update_fields=["is_blocked", "is_active"])
-        return Response(DashboardUserSerializer(user).data)
+        with transaction.atomic():
+            if bills_count:
+                employee_bills.delete()
+            employee.delete()
+
+        return Response(
+            {"message": "User and their data deleted successfully."},
+            status=status.HTTP_200_OK,
+        )
 
 
-class ManagerStaffPerformanceView(APIView):
+class ManagerStaffPerformanceViewSet(viewsets.ModelViewSet):
     permission_classes = [IsManager]
+    http_method_names = ["get"]
+    queryset = User.objects.none()
 
-    def get(self, request):
-        range_type = request.query_params.get("range", "day")
-        date_str = request.query_params.get("date", "")
-        start, end = parse_date_range(range_type, date_str)
-        shop = request.user.shop
+    def get_queryset(self):
+        return self.request.user.shop.users.filter(role=User.Role.EMPLOYEE).order_by(
+            "username"
+        )
 
-        staff = shop.users.filter(role=User.Role.EMPLOYEE)
+    def list(self, request, *args, **kwargs):
+        params = request.query_params
+        start_date_param = (params.get("start_date") or "").strip()
+        end_date_param = (params.get("end_date") or "").strip()
+
+        today = timezone.localdate()
+
+        if start_date_param:
+            try:
+                start_date = datetime.strptime(start_date_param, "%d-%m-%Y").date()
+            except ValueError as exc:
+                raise ValidationError(
+                    {"start_date": ["Invalid date format. Use DD-MM-YYYY."]}
+                ) from exc
+        else:
+            start_date = today
+
+        if end_date_param:
+            try:
+                end_date = datetime.strptime(end_date_param, "%d-%m-%Y").date()
+            except ValueError as exc:
+                raise ValidationError(
+                    {"end_date": ["Invalid date format. Use DD-MM-YYYY."]}
+                ) from exc
+        else:
+            end_date = today
+
+        if start_date > end_date:
+            raise ValidationError(
+                {"date_range": ["start_date cannot be greater than end_date."]}
+            )
+
+        employees = self.get_queryset()
+
         results = []
-
-        for employee in staff:
-            bills = Bill.objects.filter(
+        for employee in employees:
+            agg = Bill.objects.filter(
                 created_by=employee,
                 payment_status=Bill.PaymentStatus.PAID,
-                created_at__date__gte=start,
-                created_at__date__lte=end,
-            )
-            agg = bills.aggregate(
-                total=Sum("total_amount"),
-                count=Count("id"),
+                created_at__date__gte=start_date,
+                created_at__date__lte=end_date,
+            ).aggregate(
+                bills_generated=Count("id"),
+                revenue=Sum("total_amount"),
             )
             results.append(
                 {
-                    "userId": str(employee.id),
-                    "staffName": employee.username,
-                    "billsCount": agg["count"] or 0,
-                    "revenue": format_inr(agg["total"] or 0),
+                    "id": employee.id,
+                    "name": employee.username,
+                    "bills_generated": agg["bills_generated"] or 0,
+                    "revenue": format_indian_amount(agg["revenue"] or Decimal("0.00")),
                 }
             )
-
-        return Response(results)
-
-
-class ManagerOverviewView(APIView):
-    permission_classes = [IsManager]
-
-    def get(self, request):
-        range_type = request.query_params.get("range", "day")
-        date_str = request.query_params.get("date", "")
-        start, end = parse_date_range(range_type, date_str)
-
-        paid_bills = Bill.objects.filter(
-            payment_status=Bill.PaymentStatus.PAID,
-            created_at__date__gte=start,
-            created_at__date__lte=end,
-        )
-
-        agg = paid_bills.aggregate(
-            revenue=Sum("total_amount"),
-            tx_count=Count("id"),
-        )
-        revenue = agg["revenue"] or Decimal("0.00")
-        tx_count = agg["tx_count"] or 0
-        avg = revenue / tx_count if tx_count else Decimal("0.00")
-
-        critical = Notification.objects.filter(
-            priority=Notification.Priority.HIGH,
-            created_at__date__gte=start,
-            created_at__date__lte=end,
-        ).count()
-
-        trend = self._revenue_trend(start, end, range_type)
-        payment_split = self._payment_split(paid_bills)
 
         return Response(
             {
-                "revenue": format_inr(revenue),
-                "txCount": tx_count,
-                "avgOrderValue": format_inr(avg),
-                "criticalAlerts": critical,
-                "revenueTrend": trend,
-                "paymentSplit": payment_split,
-            }
+                "start_date": start_date.strftime("%d-%m-%Y"),
+                "end_date": end_date.strftime("%d-%m-%Y"),
+                "staff_performance": results,
+            },
+            status=status.HTTP_200_OK,
         )
-
-    def _revenue_trend(self, start, end, range_type):
-        paid = Bill.objects.filter(
-            payment_status=Bill.PaymentStatus.PAID,
-            created_at__date__gte=start,
-            created_at__date__lte=end,
-        )
-
-        if range_type == "day":
-            hourly = {}
-            for bill in paid:
-                hour = timezone.localtime(bill.created_at).hour
-                label = f"{hour:02d}:00"
-                hourly[label] = hourly.get(label, 0) + float(bill.total_amount)
-            return [{"label": k, "revenue": v} for k, v in sorted(hourly.items())]
-
-        daily = (
-            paid.annotate(day=TruncDate("created_at"))
-            .values("day")
-            .annotate(revenue=Sum("total_amount"))
-            .order_by("day")
-        )
-        return [
-            {
-                "label": row["day"].strftime("%d %b"),
-                "revenue": float(row["revenue"] or 0),
-            }
-            for row in daily
-        ]
-
-    def _payment_split(self, queryset):
-        totals = queryset.values("payment_method").annotate(
-            total=Sum("total_amount")
-        )
-        label_map = {
-            Bill.PaymentMethod.CASH: "Cash",
-            Bill.PaymentMethod.CARD: "Card",
-            Bill.PaymentMethod.QR: "UPI / QR",
-        }
-        return [
-            {
-                "method": label_map.get(row["payment_method"], row["payment_method"]),
-                "value": float(row["total"] or 0),
-            }
-            for row in totals
-        ]
-
-
-class ManagerOverviewSalesView(APIView):
-    permission_classes = [IsManager]
-
-    def get(self, request):
-        range_type = request.query_params.get("range", "day")
-        date_str = request.query_params.get("date", "")
-        brand = (request.query_params.get("brand") or "").strip().lower()
-        category = (request.query_params.get("category") or "").strip().lower()
-        start, end = parse_date_range(range_type, date_str)
-
-        items = (
-            BillItem.objects.filter(
-                bill__payment_status=Bill.PaymentStatus.PAID,
-                bill__created_at__date__gte=start,
-                bill__created_at__date__lte=end,
-            )
-            .select_related(
-                "product_variant__product__company",
-                "product_variant__product__item_type",
-            )
-            .values(
-                "product_variant_id",
-                "product_variant__barcode_number",
-                "product_variant__product__item_type__name",
-                "product_variant__product__company__name",
-                "product_variant__product__gender",
-            )
-            .annotate(sales=Sum("quantity"))
-            .order_by("-sales")[:50]
-        )
-
-        results = []
-        for row in items:
-            item_brand = (row["product_variant__product__company__name"] or "").lower()
-            item_category = (row["product_variant__product__gender"] or "general").lower()
-            if brand and brand not in item_brand:
-                continue
-            if category and category not in item_category:
-                continue
-            results.append(
-                {
-                    "id": str(row["product_variant_id"]),
-                    "sku": row["product_variant__barcode_number"] or "—",
-                    "name": (
-                        row["product_variant__product__item_type__name"] or "Product"
-                    ).title(),
-                    "brand": (
-                        row["product_variant__product__company__name"] or "—"
-                    ).title(),
-                    "category": item_category.title(),
-                    "sales": int(row["sales"] or 0),
-                }
-            )
-
-        return Response(results)
-
-
-class ManagerBillsView(APIView):
-    permission_classes = [IsManager]
-
-    def get(self, request):
-        range_type = request.query_params.get("range", "day")
-        date_str = request.query_params.get("date", "")
-        start, end = parse_date_range(range_type, date_str)
-
-        bills = (
-            Bill.objects.filter(
-                created_at__date__gte=start,
-                created_at__date__lte=end,
-            )
-            .select_related("created_by")
-            .order_by("-created_at")[:200]
-        )
-
-        data = []
-        for bill in bills:
-            item_count = bill.bill_items.aggregate(total=Sum("quantity"))["total"] or 0
-            status_label = (
-                "completed"
-                if bill.payment_status == Bill.PaymentStatus.PAID
-                else "pending"
-            )
-            data.append(
-                {
-                    "id": str(bill.id),
-                    "billNumber": bill.bill_number,
-                    "staffName": bill.created_by.username,
-                    "amount": float(bill.total_amount),
-                    "itemCount": int(item_count),
-                    "timestamp": timezone_format(bill.created_at),
-                    "status": status_label,
-                }
-            )
-
-        return Response(data)
-
-
-class ManagerActivityView(APIView):
-    permission_classes = [IsManager]
-
-    def get(self, request):
-        bills = (
-            Bill.objects.select_related("created_by")
-            .order_by("-created_at")[:100]
-        )
-        logs = []
-        for bill in bills:
-            logs.append(
-                {
-                    "id": f"bill-{bill.id}",
-                    "timestamp": timezone_format(bill.created_at),
-                    "actor": bill.created_by.username,
-                    "action": f"Created bill {bill.bill_number}",
-                    "meta": f"{bill.get_payment_method_display()} · {format_inr(bill.total_amount)}",
-                }
-            )
-
-        configs = PaymentConfig.objects.order_by("-updated_at")[:20]
-        for cfg in configs:
-            logs.append(
-                {
-                    "id": f"cfg-{cfg.id}",
-                    "timestamp": timezone_format(cfg.updated_at),
-                    "actor": "Manager",
-                    "action": f"Payment QR: {cfg.name}",
-                    "meta": "Active" if cfg.is_active else "Inactive",
-                }
-            )
-
-        logs.sort(key=lambda x: x["timestamp"], reverse=True)
-        return Response(logs[:80])
-
-
-class ManagerStockListView(APIView):
-    permission_classes = [IsManager]
-
-    def get(self, request):
-        variants = (
-            ProductVariant.objects.filter(is_active=True)
-            .select_related("product__company", "product__item_type", "size", "color")
-            .order_by("-updated_at")[:500]
-        )
-        return Response(
-            StockItemSerializer(variants, many=True).data
-        )
-
-
-class ManagerStockDetailView(APIView):
-    permission_classes = [IsManager]
-
-    def patch(self, request, item_id):
-        try:
-            variant = ProductVariant.objects.select_related("product").get(pk=item_id)
-        except ProductVariant.DoesNotExist:
-            return Response({"detail": "Item not found."}, status=404)
-
-        serializer = StockUpdateSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        data = serializer.validated_data
-
-        if "price" in data:
-            variant.price = data["price"]
-        if "qty" in data:
-            variant.quantity = data["qty"]
-        variant.save()
-
-        return Response(StockItemSerializer(variant).data)
-
-
-class ManagerReportsView(APIView):
-    permission_classes = [IsManager]
-
-    def get(self, request):
-        today = timezone.localdate()
-        month_start = today.replace(day=1)
-
-        month_bills = Bill.objects.filter(
-            payment_status=Bill.PaymentStatus.PAID,
-            created_at__date__gte=month_start,
-        )
-        month_revenue = month_bills.aggregate(total=Sum("total_amount"))["total"] or 0
-        month_count = month_bills.count()
-
-        active_staff = request.user.shop.users.filter(
-            role=User.Role.EMPLOYEE,
-            is_blocked=False,
-            is_active=True,
-        ).count()
-
-        low_stock = ProductVariant.objects.filter(
-            is_active=True,
-            quantity__lte=5,
-            quantity__gt=0,
-        ).count()
-
-        qr_configs = PaymentConfig.objects.filter(is_active=True).count()
-
-        return Response(
-            [
-                {
-                    "id": "month-revenue",
-                    "title": "Monthly Revenue",
-                    "description": "Paid bills this month",
-                    "value": format_inr(month_revenue),
-                },
-                {
-                    "id": "month-bills",
-                    "title": "Bills This Month",
-                    "description": "Total completed transactions",
-                    "value": str(month_count),
-                },
-                {
-                    "id": "active-staff",
-                    "title": "Active Staff",
-                    "description": "Employees not blocked",
-                    "value": str(active_staff),
-                },
-                {
-                    "id": "low-stock",
-                    "title": "Low Stock Items",
-                    "description": "Variants at or below threshold",
-                    "value": str(low_stock),
-                },
-                {
-                    "id": "payment-qr",
-                    "title": "Payment QR Codes",
-                    "description": "Active configs for billing app",
-                    "value": str(qr_configs),
-                },
-            ]
-        )
-
-
-class ManagerAlertsView(APIView):
-    permission_classes = [IsManager]
-
-    def get(self, request):
-        notifications = Notification.objects.order_by("-created_at")[:50]
-        severity_map = {
-            Notification.Priority.HIGH: "critical",
-            Notification.Priority.MEDIUM: "warning",
-            Notification.Priority.LOW: "info",
-        }
-        data = []
-        for n in notifications:
-            data.append(
-                {
-                    "id": str(n.id),
-                    "severity": severity_map.get(n.priority, "info"),
-                    "title": n.title,
-                    "message": n.message,
-                    "timestamp": timezone_format(n.created_at),
-                    "seen": False,
-                }
-            )
-        return Response(data)
-
-
-class ManagerPaymentConfigListCreateView(APIView):
-    permission_classes = [IsManager]
-    parser_classes = [MultiPartParser, FormParser]
-
-    def get(self, request):
-        configs = PaymentConfig.objects.order_by("-created_at")
-        return Response(
-            PaymentConfigSerializer(configs, many=True, context={"request": request}).data
-        )
-
-    def post(self, request):
-        serializer = PaymentConfigWriteSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        config = serializer.save()
-        return Response(
-            PaymentConfigSerializer(config, context={"request": request}).data,
-            status=status.HTTP_201_CREATED,
-        )
-
-
-class ManagerPaymentConfigDetailView(APIView):
-    permission_classes = [IsManager]
-    parser_classes = [MultiPartParser, FormParser]
-
-    def patch(self, request, config_id):
-        try:
-            config = PaymentConfig.objects.get(pk=config_id)
-        except PaymentConfig.DoesNotExist:
-            return Response({"detail": "Payment config not found."}, status=404)
-
-        serializer = PaymentConfigWriteSerializer(
-            config,
-            data=request.data,
-            partial=True,
-        )
-        serializer.is_valid(raise_exception=True)
-        config = serializer.save()
-        return Response(
-            PaymentConfigSerializer(config, context={"request": request}).data
-        )
-
-    def delete(self, request, config_id):
-        try:
-            config = PaymentConfig.objects.get(pk=config_id)
-        except PaymentConfig.DoesNotExist:
-            return Response({"detail": "Payment config not found."}, status=404)
-
-        config.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
