@@ -160,7 +160,6 @@ class VendorStockCreateViewSet(viewsets.ModelViewSet):
                 )
 
             product = Product.objects.create(
-                name=item_type.name,
                 company=company,
                 gender=gender,
                 item_type=item_type,
@@ -283,7 +282,6 @@ class VendorExistingStockCreateViewSet(viewsets.ModelViewSet):
                 )
 
             product = Product.objects.create(
-                name=item_type.name,
                 company=company,
                 gender=gender,
                 item_type=item_type,
@@ -509,7 +507,7 @@ class VendorStockHistoryDetailsViewset(viewsets.ReadOnlyModelViewSet):
         stock_entry = get_object_or_404(StockEntry, stk_number=stk_number)
 
         variants_qs = (
-            stock_entry.stock_variants.select_related("product", "size", "color").order_by("-created_at")
+            stock_entry.stock_variants.select_related("product", "product__item_type", "size", "color").order_by("-created_at")
         )
 
         products = {}
@@ -518,7 +516,7 @@ class VendorStockHistoryDetailsViewset(viewsets.ReadOnlyModelViewSet):
             pid = p.id
             if pid not in products:
                 products[pid] = {
-                    "product_name": p.item_type.name if p.item_type else p.name,
+                    "product_name": p.item_type.name if p.item_type else None,
                     "company_name": p.company.name if p.company else None,
                     "gender": p.gender,
                     "variants": [],

@@ -5,6 +5,7 @@ from django.utils import timezone
 from rest_framework import serializers
 
 from apps.accounts.models import User
+from apps.products.models import Company, ItemType, ProductVariant
 from apps.sales.models import Bill, PaymentConfig
 from apps.sales.utils import format_indian_amount
 
@@ -198,3 +199,54 @@ class ManagerBillListSerializer(serializers.ModelSerializer):
     def get_created_time(self, obj):
         local_time = timezone.localtime(obj.created_at)
         return local_time.strftime("%b %d, %Y, %I:%M %p")
+
+
+class ManagerBrandSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Company
+        fields = ["id", "name"]
+
+
+class ManagerItemTypeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ItemType
+        fields = ["id", "name"]
+
+
+class ManagerLowStockItemSerializer(serializers.ModelSerializer):
+    product_name = serializers.SerializerMethodField()
+    sku = serializers.SerializerMethodField()
+    brand = serializers.SerializerMethodField()
+    item_type = serializers.SerializerMethodField()
+    stock_status = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ProductVariant
+        fields = [
+            "id",
+            "product_name",
+            "sku",
+            "brand",
+            "item_type",
+            "quantity",
+            "low_stock_threshold",
+            "stock_status",
+        ]
+
+    def get_product_name(self, obj):
+        item_type = getattr(getattr(obj, "product", None), "item_type", None)
+        return getattr(item_type, "name", None)
+
+    def get_sku(self, obj):
+        return obj.barcode_number
+
+    def get_brand(self, obj):
+        company = getattr(getattr(obj, "product", None), "company", None)
+        return getattr(company, "name", None)
+
+    def get_item_type(self, obj):
+        item_type = getattr(getattr(obj, "product", None), "item_type", None)
+        return getattr(item_type, "name", None)
+
+    def get_stock_status(self, obj):
+        return "out_of_stock" if obj.quantity == 0 else "low_stock"

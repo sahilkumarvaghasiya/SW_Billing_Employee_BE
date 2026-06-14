@@ -6,9 +6,13 @@ from apps.manager.views import (
     ManagerEmployeeLimitViewSet,
     ManagerEmployeeListViewSet,
     ManagerEmployeeManageViewSet,
+    ManagerLowStockBrandViewSet,
+    ManagerLowStockItemTypeViewSet,
+    ManagerLowStockItemsViewSet,
     ManagerOverviewViewSet,
     ManagerPaymentConfigViewSet,
     ManagerStaffPerformanceViewSet,
+    ManagerStockSummaryViewSet,
 )
 
 
@@ -26,6 +30,19 @@ urlpatterns = [
         ManagerStaffPerformanceViewSet.as_view({"get": "list"}),
     ),
     path("employees/limit/", ManagerEmployeeLimitViewSet.as_view({"get": "list"})),
+    path("stock-summary/", ManagerStockSummaryViewSet.as_view({"get": "list"})),
+    path(
+        "stock/low-stock/brands/",
+        ManagerLowStockBrandViewSet.as_view({"get": "list"}),
+    ),
+    path(
+        "stock/low-stock/item-types/",
+        ManagerLowStockItemTypeViewSet.as_view({"get": "list"}),
+    ),
+    path(
+        "stock/low-stock/items/",
+        ManagerLowStockItemsViewSet.as_view({"get": "list"}),
+    ),
     path(
         "employees/<int:pk>/block/",
         ManagerEmployeeManageViewSet.as_view({"patch": "partial_update"}),

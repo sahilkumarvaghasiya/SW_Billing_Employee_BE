@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 from django.db import transaction
-from django.db.models import Count, Q, Sum
+from django.db.models import Count, F, Q, Sum
 from django.db.models.functions import TruncDate, TruncMonth, TruncYear
 from django.utils import timezone
 from rest_framework import status, viewsets
@@ -11,12 +11,17 @@ from apps.manager.pagination import ManagerBillsPagination, ManagerEmployeesPagi
 from apps.manager.permissions import IsManager
 from apps.manager.serializers import (
     ManagerBillListSerializer,
+    ManagerBrandSerializer,
     ManagerEmployeeBlockSerializer,
     ManagerEmployeeCreateSerializer,
     ManagerEmployeeListSerializer,
+    ManagerItemTypeSerializer,
+    ManagerLowStockItemSerializer,
     ManagerPaymentConfigSerializer,
 )
+from apps.manager.utils import under_threshold_variants
 from apps.accounts.models import User
+from apps.products.models import Company, ItemType, ProductVariant
 from apps.sales.models import Bill, BillItem, PaymentConfig
 from apps.sales.utils import format_indian_amount
 
@@ -323,6 +328,88 @@ class ManagerPaymentConfigViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         return PaymentConfig.objects.all().order_by("-created_at")
+
+
+class ManagerStockSummaryViewSet(viewsets.ViewSet):
+    permission_classes = [IsManager]
+    http_method_names = ["get"]
+
+    def list(self, request, *args, **kwargs):
+        variants = ProductVariant.objects.filter(is_active=True)
+
+        summary = variants.aggregate(
+            total_stock=Count("id"),
+            out_of_stock=Count("id", filter=Q(quantity=0)),
+            low_stock=Count(
+                "id",
+                filter=Q(quantity__gt=0)
+                & Q(quantity__lte=F("low_stock_threshold")),
+            ),
+        )
+
+        return Response(
+            {
+                "total_stock": summary["total_stock"] or 0,
+                "out_of_stock": summary["out_of_stock"] or 0,
+                "low_stock": summary["low_stock"] or 0,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class ManagerLowStockBrandViewSet(viewsets.ReadOnlyModelViewSet):
+    permission_classes = [IsManager]
+    serializer_class = ManagerBrandSerializer
+    http_method_names = ["get"]
+    pagination_class = None
+
+    def get_queryset(self):
+        brand_ids = (
+            under_threshold_variants()
+            .exclude(product__company__isnull=True)
+            .values_list("product__company", flat=True)
+            .distinct()
+        )
+        return Company.objects.filter(id__in=brand_ids).order_by("name")
+
+
+class ManagerLowStockItemTypeViewSet(viewsets.ReadOnlyModelViewSet):
+    permission_classes = [IsManager]
+    serializer_class = ManagerItemTypeSerializer
+    http_method_names = ["get"]
+    pagination_class = None
+
+    def get_queryset(self):
+        item_type_ids = (
+            under_threshold_variants()
+            .exclude(product__item_type__isnull=True)
+            .values_list("product__item_type", flat=True)
+            .distinct()
+        )
+        return ItemType.objects.filter(id__in=item_type_ids).order_by("name")
+
+
+class ManagerLowStockItemsViewSet(viewsets.ReadOnlyModelViewSet):
+    permission_classes = [IsManager]
+    serializer_class = ManagerLowStockItemSerializer
+    http_method_names = ["get"]
+
+    def get_queryset(self):
+        params = self.request.query_params
+        brand = (params.get("brand") or "").strip()
+        item_type = (params.get("item_type") or "").strip()
+
+        queryset = (
+            under_threshold_variants()
+            .select_related("product", "product__company", "product__item_type")
+        )
+
+        if brand:
+            queryset = queryset.filter(product__company_id=brand)
+        if item_type:
+            queryset = queryset.filter(product__item_type_id=item_type)
+
+        return queryset.order_by("quantity")
 
 
 class ManagerStaffPerformanceViewSet(viewsets.ModelViewSet):

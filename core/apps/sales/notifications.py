@@ -19,8 +19,6 @@ def _variant_descriptor(variant):
     product_name = None
     if variant.product and variant.product.item_type:
         product_name = variant.product.item_type.name
-    elif variant.product:
-        product_name = variant.product.name
 
     size = variant.size.name if variant.size else None
     color = variant.color.name if variant.color else None

@@ -85,8 +85,7 @@ class BarcodeProductLookupListView(viewsets.ReadOnlyModelViewSet):
 
         if search and total_count > 1:
             barcode_queryset = barcode_queryset.filter(
-                Q(product__name__icontains=search)
-                | Q(product__company__name__icontains=search)
+                Q(product__company__name__icontains=search)
                 | Q(product__item_type__name__icontains=search)
             )
 
