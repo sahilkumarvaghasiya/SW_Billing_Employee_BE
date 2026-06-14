@@ -1,4 +1,5 @@
-from django.urls import path
+from django.urls import include, path
+from rest_framework.routers import DefaultRouter
 from apps.manager.views import (
     ManagerBillsViewSet,
     ManagerEmployeeCreateViewSet,
@@ -6,8 +7,13 @@ from apps.manager.views import (
     ManagerEmployeeListViewSet,
     ManagerEmployeeManageViewSet,
     ManagerOverviewViewSet,
+    ManagerPaymentConfigViewSet,
     ManagerStaffPerformanceViewSet,
 )
+
+
+router = DefaultRouter()
+router.register("payment-configs", ManagerPaymentConfigViewSet, basename="payment-config")
 
 
 urlpatterns = [
@@ -28,4 +34,5 @@ urlpatterns = [
         "employees/<int:pk>/delete/",
         ManagerEmployeeManageViewSet.as_view({"delete": "destroy"}),
     ),
+    path("", include(router.urls)),
 ]

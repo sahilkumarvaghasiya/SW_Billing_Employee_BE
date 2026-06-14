@@ -1,10 +1,11 @@
 import re
 
+from django.core.validators import FileExtensionValidator
 from django.utils import timezone
 from rest_framework import serializers
 
 from apps.accounts.models import User
-from apps.sales.models import Bill
+from apps.sales.models import Bill, PaymentConfig
 from apps.sales.utils import format_indian_amount
 
 
@@ -88,6 +89,7 @@ class ManagerEmployeeCreateSerializer(serializers.Serializer):
 class ManagerEmployeeListSerializer(serializers.ModelSerializer):
     name = serializers.CharField(source="username")
     status = serializers.SerializerMethodField()
+    created_at = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -99,6 +101,7 @@ class ManagerEmployeeListSerializer(serializers.ModelSerializer):
             "is_active",
             "is_blocked",
             "status",
+            "created_at",
         ]
 
     def get_status(self, obj):
@@ -106,9 +109,62 @@ class ManagerEmployeeListSerializer(serializers.ModelSerializer):
             return "inactive"
         return "active"
 
+    def get_created_at(self, obj):
+        if not obj.date_joined:
+            return None
+        local_time = timezone.localtime(obj.date_joined)
+        return local_time.strftime("%b %d, %Y, %I:%M %p")
+
 
 class ManagerEmployeeBlockSerializer(serializers.Serializer):
     is_blocked = serializers.BooleanField()
+
+
+class ManagerPaymentConfigSerializer(serializers.ModelSerializer):
+    image_url = serializers.SerializerMethodField()
+    qr_image = serializers.FileField(
+        write_only=True,
+        required=False,
+        validators=[
+            FileExtensionValidator(
+                allowed_extensions=["png", "jpg", "jpeg", "webp", "gif", "svg"]
+            )
+        ],
+    )
+
+    class Meta:
+        model = PaymentConfig
+        fields = [
+            "id",
+            "name",
+            "qr_image",
+            "image_url",
+            "is_active",
+            "created_at",
+            "updated_at",
+        ]
+
+    def validate_name(self, value):
+        value = (value or "").strip()
+        if not value:
+            raise serializers.ValidationError("Name is required.")
+        return value
+
+    def validate(self, attrs):
+        if self.instance is None and not attrs.get("qr_image"):
+            raise serializers.ValidationError(
+                {"qr_image": ["QR image is required."]}
+            )
+        return attrs
+
+    def get_image_url(self, obj):
+        if not obj.qr_image:
+            return None
+
+        request = self.context.get("request")
+        if request:
+            return request.build_absolute_uri(obj.qr_image.url)
+        return obj.qr_image.url
 
 
 class ManagerBillListSerializer(serializers.ModelSerializer):

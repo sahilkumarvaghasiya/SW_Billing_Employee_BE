@@ -14,9 +14,10 @@ from apps.manager.serializers import (
     ManagerEmployeeBlockSerializer,
     ManagerEmployeeCreateSerializer,
     ManagerEmployeeListSerializer,
+    ManagerPaymentConfigSerializer,
 )
 from apps.accounts.models import User
-from apps.sales.models import Bill, BillItem
+from apps.sales.models import Bill, BillItem, PaymentConfig
 from apps.sales.utils import format_indian_amount
 
 
@@ -146,10 +147,13 @@ class ManagerBillsViewSet(viewsets.ReadOnlyModelViewSet):
         start_date_param = (params.get("start_date") or "").strip()
         end_date_param = (params.get("end_date") or "").strip()
         search = (params.get("search") or "").strip()
+        sort = (params.get("sort") or "").strip().lower()
 
         queryset = Bill.objects.select_related("customer", "created_by").filter(
             is_active=True,
         )
+
+        today = timezone.localdate()
 
         if start_date_param:
             try:
@@ -158,7 +162,8 @@ class ManagerBillsViewSet(viewsets.ReadOnlyModelViewSet):
                 raise ValidationError(
                     {"start_date": ["Invalid date format. Use DD-MM-YYYY."]}
                 ) from exc
-            queryset = queryset.filter(created_at__date__gte=start_date)
+        else:
+            start_date = today
 
         if end_date_param:
             try:
@@ -167,7 +172,18 @@ class ManagerBillsViewSet(viewsets.ReadOnlyModelViewSet):
                 raise ValidationError(
                     {"end_date": ["Invalid date format. Use DD-MM-YYYY."]}
                 ) from exc
-            queryset = queryset.filter(created_at__date__lte=end_date)
+        else:
+            end_date = today
+
+        if start_date > end_date:
+            raise ValidationError(
+                {"date_range": ["start_date cannot be greater than end_date."]}
+            )
+
+        queryset = queryset.filter(
+            created_at__date__gte=start_date,
+            created_at__date__lte=end_date,
+        )
 
         if search:
             queryset = queryset.filter(
@@ -175,7 +191,8 @@ class ManagerBillsViewSet(viewsets.ReadOnlyModelViewSet):
                 | Q(created_by__username__icontains=search)
             )
 
-        return queryset.order_by("-created_at")
+        ordering = "created_at" if sort == "oldest" else "-created_at"
+        return queryset.order_by(ordering)
 
 
 class ManagerEmployeeCreateViewSet(viewsets.ViewSet):
@@ -230,8 +247,12 @@ class ManagerEmployeeListViewSet(viewsets.ReadOnlyModelViewSet):
     http_method_names = ["get"]
 
     def get_queryset(self):
-        return self.request.user.shop.users.filter(role=User.Role.EMPLOYEE).order_by(
-            "-date_joined"
+        sort = (self.request.query_params.get("sort") or "").strip().lower()
+        ordering = "date_joined" if sort == "oldest" else "-date_joined"
+
+        return (
+            self.request.user.shop.users.filter(role=User.Role.EMPLOYEE)
+            .order_by(ordering)
         )
 
 
@@ -293,6 +314,15 @@ class ManagerEmployeeManageViewSet(viewsets.ModelViewSet):
             {"message": "User and their data deleted successfully."},
             status=status.HTTP_200_OK,
         )
+
+
+class ManagerPaymentConfigViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsManager]
+    serializer_class = ManagerPaymentConfigSerializer
+    http_method_names = ["get", "post", "patch", "delete"]
+
+    def get_queryset(self):
+        return PaymentConfig.objects.all().order_by("-created_at")
 
 
 class ManagerStaffPerformanceViewSet(viewsets.ModelViewSet):
