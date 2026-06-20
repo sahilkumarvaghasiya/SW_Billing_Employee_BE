@@ -13,6 +13,7 @@ class User(AbstractUser):
         choices=Role.choices,
         default=Role.EMPLOYEE
     )
+    phone_number = models.CharField(max_length=20, blank=True, null=True)
     token_version = models.PositiveIntegerField(default=1)
     failed_device_login_count = models.PositiveIntegerField(default=0)
     is_blocked = models.BooleanField(default=False)

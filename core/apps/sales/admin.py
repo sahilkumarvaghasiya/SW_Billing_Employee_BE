@@ -109,7 +109,7 @@ class BillItemAdmin(TenantSchemaAdminMixin, admin.ModelAdmin):
     search_fields = (
         "bill__bill_number",
         "product_variant__barcode_number",
-        "product_variant__product__name",
+        "product_variant__product__item_type__name",
         "product_variant__product__company__name",
     )
     list_filter = (

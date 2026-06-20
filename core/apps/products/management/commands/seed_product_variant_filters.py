@@ -99,10 +99,8 @@ class Command(BaseCommand):
                 company, _ = Company.objects.get_or_create(
                     name=f"{DUMMY_TAG} {keyword} textiles {gender}".lower(),
                 )
-                product_name = f"{DUMMY_TAG} {gender} product {idx} {keyword}"
 
                 product = Product.objects.create(
-                    name=product_name,
                     company=company,
                     gender=gender,
                     item_type=item_type,

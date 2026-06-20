@@ -80,7 +80,6 @@ class Product(models.Model):
         BOY = 'boy', 'Boy'
         GIRL = 'girl', 'Girl'
 
-    name = models.CharField(max_length=255, null=True, blank=True)
     company = models.ForeignKey(
         Company,
         on_delete=models.SET_NULL,
@@ -110,7 +109,7 @@ class Product(models.Model):
         ]
 
     def __str__(self):
-            return f"{self.name} ({self.item_type.name})" if self.item_type else self.name
+        return self.item_type.name if self.item_type else f"Product #{self.pk}"
 
 
 class ProductVariant(models.Model):
