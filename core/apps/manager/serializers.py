@@ -1,13 +1,17 @@
 import re
+from decimal import Decimal
 
 from django.core.validators import FileExtensionValidator
 from django.utils import timezone
 from rest_framework import serializers
 
+from dateutil.relativedelta import relativedelta
+
 from apps.accounts.models import User
-from apps.products.models import Company, ItemType, ProductVariant
+from apps.products.models import Company, ItemType, Product, ProductVariant
 from apps.sales.models import Bill, PaymentConfig
 from apps.sales.utils import format_indian_amount
+from apps.vendors.models import StockEntry
 
 
 class ManagerEmployeeCreateSerializer(serializers.Serializer):
@@ -213,6 +217,128 @@ class ManagerItemTypeSerializer(serializers.ModelSerializer):
         fields = ["id", "name"]
 
 
+class ManagerStockItemDetailsSerializer(serializers.ModelSerializer):
+    item_name = serializers.SerializerMethodField()
+    brand = serializers.SerializerMethodField()
+    size = serializers.SerializerMethodField()
+    color = serializers.SerializerMethodField()
+    gender = serializers.SerializerMethodField()
+    purchase_price = serializers.DecimalField(
+        source="original_purchase_price",
+        max_digits=10,
+        decimal_places=2,
+    )
+    sell_price = serializers.DecimalField(
+        source="price",
+        max_digits=10,
+        decimal_places=2,
+    )
+    qty = serializers.IntegerField(source="quantity")
+    low_stock_limit = serializers.IntegerField(source="low_stock_threshold")
+    status = serializers.SerializerMethodField()
+    created = serializers.SerializerMethodField()
+    updated = serializers.SerializerMethodField()
+
+    _gender_labels = dict(Product.GenderChoices.choices)
+
+    class Meta:
+        model = ProductVariant
+        fields = [
+            "id",
+            "item_name",
+            "brand",
+            "size",
+            "color",
+            "gender",
+            "purchase_price",
+            "sell_price",
+            "qty",
+            "low_stock_limit",
+            "status",
+            "created",
+            "updated",
+        ]
+
+    def get_item_name(self, obj):
+        item_type = getattr(getattr(obj, "product", None), "item_type", None)
+        name = getattr(item_type, "name", None)
+        return name.title() if name else None
+
+    def get_brand(self, obj):
+        company = getattr(getattr(obj, "product", None), "company", None)
+        name = getattr(company, "name", None)
+        return name.title() if name else None
+
+    def get_size(self, obj):
+        name = getattr(obj.size, "name", None)
+        return name.upper() if name else None
+
+    def get_color(self, obj):
+        name = getattr(obj.color, "name", None)
+        return name.title() if name else None
+
+    def get_gender(self, obj):
+        value = getattr(getattr(obj, "product", None), "gender", None)
+        return self._gender_labels.get(value, value)
+
+    def get_status(self, obj):
+        if obj.quantity == 0:
+            return "out_of_stock"
+        if obj.quantity <= obj.low_stock_threshold:
+            return "low_stock"
+        return "in_stock"
+
+    def get_created(self, obj):
+        return timezone.localtime(obj.created_at).strftime("%b %d, %Y, %I:%M %p")
+
+    def get_updated(self, obj):
+        return timezone.localtime(obj.updated_at).strftime("%b %d, %Y, %I:%M %p")
+
+
+class ManagerStockItemUpdateSerializer(serializers.ModelSerializer):
+    price = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        min_value=Decimal("0.00"),
+        required=False,
+    )
+    quantity = serializers.IntegerField(min_value=0, required=False)
+    low_stock_threshold = serializers.IntegerField(min_value=0, required=False)
+
+    class Meta:
+        model = ProductVariant
+        fields = ["price", "quantity", "low_stock_threshold"]
+
+    def validate(self, attrs):
+        editable = {"price", "quantity", "low_stock_threshold"}
+        if not editable.intersection(attrs):
+            raise serializers.ValidationError(
+                {"detail": "Provide at least one of: price, quantity, "
+                           "low_stock_threshold."}
+            )
+        return attrs
+
+
+class ManagerStockThresholdSerializer(serializers.Serializer):
+    default_low_stock_limit = serializers.IntegerField(
+        min_value=0,
+        required=False,
+    )
+    reset = serializers.BooleanField(required=False, default=False)
+
+    def validate(self, attrs):
+        if "default_low_stock_limit" not in attrs and not attrs.get("reset"):
+            raise serializers.ValidationError(
+                {
+                    "detail": [
+                        "Provide default_low_stock_limit to update the default, "
+                        "or set reset=true to revert all products to the default."
+                    ]
+                }
+            )
+        return attrs
+
+
 class ManagerLowStockItemSerializer(serializers.ModelSerializer):
     product_name = serializers.SerializerMethodField()
     sku = serializers.SerializerMethodField()
@@ -250,3 +376,176 @@ class ManagerLowStockItemSerializer(serializers.ModelSerializer):
 
     def get_stock_status(self, obj):
         return "out_of_stock" if obj.quantity == 0 else "low_stock"
+
+
+class ManagerProductSalesTrendQuerySerializer(serializers.Serializer):
+    start_date = serializers.DateField(
+        required=False,
+        input_formats=["%d-%m-%Y"],
+        error_messages={"invalid": "Invalid date format. Use DD-MM-YYYY."},
+    )
+    end_date = serializers.DateField(
+        required=False,
+        input_formats=["%d-%m-%Y"],
+        error_messages={"invalid": "Invalid date format. Use DD-MM-YYYY."},
+    )
+    gender = serializers.ListField(
+        child=serializers.ChoiceField(choices=Product.GenderChoices.choices),
+        required=False,
+        default=list,
+    )
+    item_type = serializers.ListField(
+        child=serializers.IntegerField(),
+        required=False,
+        default=list,
+        error_messages={"invalid": "item_type must be a list of integer IDs."},
+    )
+    sort = serializers.ChoiceField(
+        choices=["most_sold", "least_sold"],
+        required=False,
+        default="most_sold",
+    )
+
+    def validate(self, attrs):
+        today = timezone.localdate()
+        min_start_date = today - relativedelta(years=1)
+
+        start_date = attrs.get("start_date") or min_start_date
+        end_date = attrs.get("end_date") or today
+
+        if start_date < min_start_date:
+            raise serializers.ValidationError(
+                {
+                    "start_date": [
+                        "Only the last 1 year of data is available. "
+                        f"start_date cannot be before "
+                        f"{min_start_date.strftime('%d-%m-%Y')}."
+                    ]
+                }
+            )
+
+        if end_date > today:
+            raise serializers.ValidationError(
+                {"end_date": ["end_date cannot be in the future."]}
+            )
+
+        if start_date > end_date:
+            raise serializers.ValidationError(
+                {"date_range": ["start_date cannot be greater than end_date."]}
+            )
+
+        attrs["start_date"] = start_date
+        attrs["end_date"] = end_date
+        attrs["min_start_date"] = min_start_date
+        return attrs
+
+
+class ManagerProductSalesTrendItemSerializer(serializers.Serializer):
+    product_id = serializers.IntegerField()
+    gender = serializers.SerializerMethodField()
+    item_type = serializers.SerializerMethodField()
+    brand = serializers.SerializerMethodField()
+    total_sold = serializers.IntegerField()
+
+    _gender_labels = dict(Product.GenderChoices.choices)
+
+    def get_gender(self, obj):
+        value = obj.get("gender")
+        return self._gender_labels.get(value, value)
+
+    def get_item_type(self, obj):
+        return (obj.get("item_type_name") or "").title() or None
+
+    def get_brand(self, obj):
+        return (obj.get("brand_name") or "").title() or None
+
+
+class ManagerVendorBillSerializer(serializers.ModelSerializer):
+    vendor = serializers.SerializerMethodField()
+    stk_no = serializers.CharField(source="stk_number")
+    bill_date = serializers.SerializerMethodField()
+    total = serializers.SerializerMethodField()
+    paid = serializers.SerializerMethodField()
+    pending = serializers.SerializerMethodField()
+    status = serializers.CharField(source="get_status_display")
+    due = serializers.SerializerMethodField()
+
+    class Meta:
+        model = StockEntry
+        fields = [
+            "id",
+            "due",
+            "vendor",
+            "stk_no",
+            "bill_date",
+            "total",
+            "paid",
+            "pending",
+            "status",
+        ]
+
+    def get_vendor(self, obj):
+        return (obj.vendor.name or "").title() if obj.vendor else None
+
+    def get_bill_date(self, obj):
+        return timezone.localtime(obj.created_at).strftime("%Y-%m-%d")
+
+    def get_total(self, obj):
+        return format_indian_amount(obj.total_amount or Decimal("0.00"))
+
+    def get_paid(self, obj):
+        return format_indian_amount(obj.paid_amount or Decimal("0.00"))
+
+    def get_pending(self, obj):
+        pending = (obj.total_amount or Decimal("0.00")) - (
+            obj.paid_amount or Decimal("0.00")
+        )
+        return format_indian_amount(pending)
+
+    def get_due(self, obj):
+        if obj.is_fully_paid or obj.status == StockEntry.StatusChoices.PAID:
+            return {"label": "Paid", "state": "paid", "days": 0}
+
+        if not obj.due_date:
+            return {"label": "No due date", "state": "none", "days": None}
+
+        today = timezone.localdate()
+        delta = (obj.due_date - today).days
+
+        if delta < 0:
+            return {"label": f"Overdue {abs(delta)}d", "state": "overdue",
+                    "days": abs(delta)}
+        return {"label": f"Due in {delta}d", "state": "due", "days": delta}
+
+
+class ManagerVendorBillPaymentSerializer(serializers.Serializer):
+    amount = serializers.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        min_value=Decimal("0.01"),
+    )
+
+    def validate(self, attrs):
+        entry = self.context["entry"]
+        amount = attrs["amount"]
+
+        if entry.is_fully_paid or entry.status == StockEntry.StatusChoices.PAID:
+            raise serializers.ValidationError(
+                {"detail": "This bill is already fully paid."}
+            )
+
+        total = entry.total_amount or Decimal("0.00")
+        paid = entry.paid_amount or Decimal("0.00")
+        pending = total - paid
+
+        if amount > pending:
+            raise serializers.ValidationError(
+                {
+                    "amount": [
+                        f"Amount cannot exceed pending balance "
+                        f"({format_indian_amount(pending)})."
+                    ]
+                }
+            )
+
+        return attrs

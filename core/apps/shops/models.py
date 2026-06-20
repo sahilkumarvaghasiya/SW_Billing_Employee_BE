@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 from django.utils.text import slugify
 from django_tenants.models import DomainMixin, TenantMixin
@@ -6,6 +7,9 @@ from django_tenants.models import DomainMixin, TenantMixin
 class Shop(TenantMixin):
     name = models.CharField(max_length=200)
     employee_limit = models.IntegerField(default=5)
+    default_low_stock_limit = models.PositiveIntegerField(
+        default=settings.LOW_STOCK_THRESHOLD
+    )
     mobile_number = models.CharField(max_length=20, blank=True, null=True)
     address = models.TextField(blank=True, null=True)
     whatsapp_phone_number_id = models.CharField(max_length=100)

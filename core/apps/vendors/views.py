@@ -6,6 +6,7 @@ from rest_framework import status, viewsets
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 from apps.accounts.permissions import IsEmployee
+from apps.manager.permissions import IsManager
 from apps.products.models import Color, ItemType, Product, ProductVariant, Size, Company
 from apps.vendors.models import StockEntry, Vendor
 from apps.vendors.serializers import (
@@ -339,12 +340,11 @@ class VendorExistingStockCreateViewSet(viewsets.ModelViewSet):
 
 class VendorListViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = VendorListSerializer
-    permission_classes = [IsEmployee]
+    permission_classes = [IsEmployee | IsManager]
     pagination_class = VendorListPagination
     http_method_names = ["get"]
 
     def get_queryset(self):
-        user = self.request.user
         search = (self.request.query_params.get("search") or "").strip()
 
         queryset = Vendor.objects.filter(is_active=True)
