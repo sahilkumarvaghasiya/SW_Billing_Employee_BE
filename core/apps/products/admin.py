@@ -36,13 +36,13 @@ class SizeAdmin(TenantSchemaAdminMixin, admin.ModelAdmin):
 class ProductAdmin(TenantSchemaAdminMixin, admin.ModelAdmin):
     list_display = (
         "id",
-        "name",
+        "item_type",
         "company",
         "gender",
         "is_active",
         "created_at",
     )
-    search_fields = ("name", "company")
+    search_fields = ("item_type__name", "company__name")
     list_filter = ("gender", "is_active")
     ordering = ("-created_at",)
 
@@ -63,7 +63,7 @@ class ProductVariantAdmin(TenantSchemaAdminMixin, admin.ModelAdmin):
     )
     search_fields = (
         "barcode_number",
-        "product__name",
+        "product__item_type__name",
         "product__company__name",
     )
     list_filter = (

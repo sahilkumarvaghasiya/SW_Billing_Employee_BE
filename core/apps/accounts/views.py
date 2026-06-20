@@ -122,24 +122,6 @@ class UserDetailView(APIView):
         })
 
 
-class CreateEmployeeView(APIView):
-
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request):
-
-        serializer = EmployeeCreateSerializer(
-            data=request.data,
-            context={"request": request}
-        )
-
-        if serializer.is_valid():
-            serializer.save()
-            return Response({"message": "Employee created"})
-
-        return Response(serializer.errors)
-
-
 class ChangePasswordView(APIView):
     permission_classes = [IsAuthenticated]
 

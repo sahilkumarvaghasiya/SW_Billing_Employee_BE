@@ -29,7 +29,8 @@ class ProductVariantListSerializer(serializers.ModelSerializer):
         return getattr(obj.product, "gender", None)
 
     def get_product_name(self, obj):
-        return getattr(obj.product, "name", None)
+        item_type = getattr(getattr(obj, "product", None), "item_type", None)
+        return getattr(item_type, "name", None)
 
     def get_company_name(self, obj):
         product = getattr(obj, "product", None)
@@ -79,7 +80,8 @@ class ProductVariantDetailSerializer(serializers.ModelSerializer):
         ]
 
     def get_product_name(self, obj):
-        return getattr(obj.product, "name", None)
+        item_type = getattr(getattr(obj, "product", None), "item_type", None)
+        return getattr(item_type, "name", None)
 
     def get_company_name(self, obj):
         product = getattr(obj, "product", None)
