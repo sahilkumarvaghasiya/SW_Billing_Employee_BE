@@ -469,6 +469,7 @@ class ManagerVendorBillSerializer(serializers.ModelSerializer):
     pending = serializers.SerializerMethodField()
     status = serializers.CharField(source="get_status_display")
     due = serializers.SerializerMethodField()
+    stock_lines = serializers.SerializerMethodField()
 
     class Meta:
         model = StockEntry
@@ -482,6 +483,7 @@ class ManagerVendorBillSerializer(serializers.ModelSerializer):
             "paid",
             "pending",
             "status",
+            "stock_lines",
         ]
 
     def get_vendor(self, obj):
@@ -516,6 +518,34 @@ class ManagerVendorBillSerializer(serializers.ModelSerializer):
             return {"label": f"Overdue {abs(delta)}d", "state": "overdue",
                     "days": abs(delta)}
         return {"label": f"Due in {delta}d", "state": "due", "days": delta}
+
+    def get_stock_lines(self, obj):
+        return stock_lines_for_entry(obj)
+
+
+def stock_lines_for_entry(entry):
+    """Aggregate product lines entered on a stock entry (item type + brand + qty)."""
+    products = {}
+    for variant in entry.stock_variants.all():
+        product = variant.product
+        product_id = product.id
+        if product_id not in products:
+            item_type_name = product.item_type.name if product.item_type else None
+            brand_name = product.company.name if product.company else None
+            products[product_id] = {
+                "item_type": (item_type_name or "").title() or None,
+                "brand": (brand_name or "").title() or None,
+                "qty": 0,
+            }
+        products[product_id]["qty"] += variant.quantity or 0
+    return list(products.values())
+
+
+class ManagerVendorReportBillSerializer(ManagerVendorBillSerializer):
+    """Report/PDF serializer — same fields as bill list including stock_lines."""
+
+    class Meta(ManagerVendorBillSerializer.Meta):
+        pass
 
 
 class ManagerVendorBillPaymentSerializer(serializers.Serializer):

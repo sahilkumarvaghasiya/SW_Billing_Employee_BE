@@ -1,7 +1,8 @@
 from datetime import datetime, timedelta
 from decimal import Decimal
+from django.http import HttpResponse
 from django.db import transaction
-from django.db.models import Count, DecimalField, F, Q, Sum
+from django.db.models import Count, DecimalField, F, Prefetch, Q, Sum
 from django.db.models.functions import Coalesce, TruncDate, TruncMonth, TruncYear
 from django.utils import timezone
 from rest_framework import status, viewsets
@@ -10,6 +11,7 @@ from rest_framework.response import Response
 from apps.manager.pagination import (
     ManagerBillsPagination,
     ManagerEmployeesPagination,
+    ManagerLowStockItemsPagination,
     ManagerProductSalesTrendPagination,
     ManagerStockItemsDetailsPagination,
     ManagerVendorBillsPagination,
@@ -32,10 +34,16 @@ from apps.manager.serializers import (
     ManagerVendorBillPaymentSerializer,
     ManagerVendorBillSerializer,
 )
+from apps.manager.services.vendor_report_pdf import generate_vendor_report_pdf
 from apps.manager.utils import (
     parse_id_list,
     parse_timestamp_ordering,
     under_threshold_variants,
+)
+from apps.manager.vendor_report import (
+    vendor_report_bill_rows,
+    vendor_report_entries,
+    vendor_report_summary,
 )
 from apps.accounts.models import User
 from apps.products.models import Company, ItemType, Product, ProductVariant
@@ -420,6 +428,7 @@ class ManagerLowStockItemTypeViewSet(viewsets.ReadOnlyModelViewSet):
 class ManagerLowStockItemsViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [IsManager]
     serializer_class = ManagerLowStockItemSerializer
+    pagination_class = ManagerLowStockItemsPagination
     http_method_names = ["get"]
 
     def get_queryset(self):
@@ -753,72 +762,66 @@ class ManagerVendorReportViewSet(viewsets.ViewSet):
     http_method_names = ["get"]
 
     def list(self, request, *args, **kwargs):
-        params = request.query_params
-        vendor_ids = parse_id_list(params, "vendor")
-
-        start_date_param = (params.get("start_date") or "").strip()
-        end_date_param = (params.get("end_date") or "").strip()
-
-        start_date = None
-        end_date = None
-
-        if start_date_param:
-            try:
-                start_date = datetime.strptime(start_date_param, "%d-%m-%Y").date()
-            except ValueError as exc:
-                raise ValidationError(
-                    {"start_date": ["Invalid date format. Use DD-MM-YYYY."]}
-                ) from exc
-
-        if end_date_param:
-            try:
-                end_date = datetime.strptime(end_date_param, "%d-%m-%Y").date()
-            except ValueError as exc:
-                raise ValidationError(
-                    {"end_date": ["Invalid date format. Use DD-MM-YYYY."]}
-                ) from exc
-
-        if start_date and end_date and start_date > end_date:
-            raise ValidationError(
-                {"date_range": ["start_date cannot be greater than end_date."]}
-            )
-
-        entries = StockEntry.objects.all()
-
-        if vendor_ids:
-            entries = entries.filter(vendor_id__in=vendor_ids)
-        if start_date:
-            entries = entries.filter(created_at__date__gte=start_date)
-        if end_date:
-            entries = entries.filter(created_at__date__lte=end_date)
-
-        agg = entries.aggregate(
-            bills=Count("id"),
-            total_billed=Coalesce(
-                Sum("total_amount"),
-                Decimal("0.00"),
-                output_field=DecimalField(max_digits=14, decimal_places=2),
-            ),
-            total_paid=Coalesce(
-                Sum(Coalesce(F("paid_amount"), Decimal("0.00"))),
-                Decimal("0.00"),
-                output_field=DecimalField(max_digits=14, decimal_places=2),
-            ),
+        entries, start_date, end_date, _vendor_ids = vendor_report_entries(
+            request.query_params
         )
-
-        total_billed = agg["total_billed"]
-        total_paid = agg["total_paid"]
-        total_pending = total_billed - total_paid
+        summary = vendor_report_summary(entries)
 
         return Response(
             {
-                "bills": agg["bills"],
-                "total_billed": format_indian_amount(total_billed),
-                "total_paid": format_indian_amount(total_paid),
-                "total_pending": format_indian_amount(total_pending),
+                "start_date": start_date.strftime("%d-%m-%Y") if start_date else None,
+                "end_date": end_date.strftime("%d-%m-%Y") if end_date else None,
+                **summary,
             },
             status=status.HTTP_200_OK,
         )
+
+
+class ManagerVendorReportPdfViewSet(viewsets.ViewSet):
+    permission_classes = [IsManager]
+    http_method_names = ["get"]
+
+    def list(self, request, *args, **kwargs):
+        params = request.query_params
+        entries, start_date, end_date, vendor_ids = vendor_report_entries(params)
+        summary = vendor_report_summary(entries)
+        bills = vendor_report_bill_rows(entries)
+
+        if vendor_ids:
+            vendor_label = f"{len(vendor_ids)} selected vendor(s)"
+        else:
+            vendor_label = "All vendors"
+
+        if start_date and end_date:
+            period_label = (
+                f"{start_date.strftime('%d-%m-%Y')} – {end_date.strftime('%d-%m-%Y')}"
+            )
+        elif start_date:
+            period_label = f"From {start_date.strftime('%d-%m-%Y')}"
+        elif end_date:
+            period_label = f"Until {end_date.strftime('%d-%m-%Y')}"
+        else:
+            period_label = "All dates"
+
+        title = "Vendor report"
+        pdf_bytes = generate_vendor_report_pdf(
+            title=title,
+            period_label=period_label,
+            vendor_label=vendor_label,
+            summary=summary,
+            bills=bills,
+        )
+
+        filename = "vendor-report.pdf"
+        if start_date and end_date:
+            filename = (
+                f"vendor-report-{start_date.strftime('%Y%m%d')}-"
+                f"{end_date.strftime('%Y%m%d')}.pdf"
+            )
+
+        response = HttpResponse(pdf_bytes, content_type="application/pdf")
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return response
 
 
 class ManagerVendorBillsViewSet(viewsets.ReadOnlyModelViewSet):
@@ -836,7 +839,17 @@ class ManagerVendorBillsViewSet(viewsets.ReadOnlyModelViewSet):
         end_date_param = (params.get("end_date") or "").strip()
         sort = (params.get("sort") or "").strip().lower()
 
-        queryset = StockEntry.objects.select_related("vendor")
+        queryset = (
+            StockEntry.objects.select_related("vendor")
+            .prefetch_related(
+                Prefetch(
+                    "stock_variants",
+                    queryset=ProductVariant.objects.select_related(
+                        "product", "product__item_type", "product__company"
+                    ),
+                )
+            )
+        )
 
         if search:
             queryset = queryset.filter(vendor__name__icontains=search)

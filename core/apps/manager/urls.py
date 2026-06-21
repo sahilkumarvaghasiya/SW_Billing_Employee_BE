@@ -17,6 +17,7 @@ from apps.manager.views import (
     ManagerStockSummaryViewSet,
     ManagerStockThresholdViewSet,
     ManagerVendorBillsViewSet,
+    ManagerVendorReportPdfViewSet,
     ManagerVendorReportViewSet,
     ManagerVendorSummaryViewSet,
 )
@@ -86,6 +87,10 @@ urlpatterns = [
     path(
         "vendors/reports/preview/",
         ManagerVendorReportViewSet.as_view({"get": "list"}),
+    ),
+    path(
+        "vendors/reports/pdf/",
+        ManagerVendorReportPdfViewSet.as_view({"get": "list"}),
     ),
     path("", include(router.urls)),
 ]
