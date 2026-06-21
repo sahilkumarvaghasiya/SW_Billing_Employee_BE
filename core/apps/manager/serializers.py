@@ -206,15 +206,25 @@ class ManagerBillListSerializer(serializers.ModelSerializer):
 
 
 class ManagerBrandSerializer(serializers.ModelSerializer):
+    name = serializers.SerializerMethodField()
+
     class Meta:
         model = Company
         fields = ["id", "name"]
 
+    def get_name(self, obj):
+        return (obj.name or "").title() if obj.name else ""
+
 
 class ManagerItemTypeSerializer(serializers.ModelSerializer):
+    name = serializers.SerializerMethodField()
+
     class Meta:
         model = ItemType
         fields = ["id", "name"]
+
+    def get_name(self, obj):
+        return (obj.name or "").title() if obj.name else ""
 
 
 class ManagerStockItemDetailsSerializer(serializers.ModelSerializer):
@@ -408,21 +418,10 @@ class ManagerProductSalesTrendQuerySerializer(serializers.Serializer):
 
     def validate(self, attrs):
         today = timezone.localdate()
-        min_start_date = today - relativedelta(years=1)
+        default_start = today - relativedelta(days=29)
 
-        start_date = attrs.get("start_date") or min_start_date
+        start_date = attrs.get("start_date") or default_start
         end_date = attrs.get("end_date") or today
-
-        if start_date < min_start_date:
-            raise serializers.ValidationError(
-                {
-                    "start_date": [
-                        "Only the last 1 year of data is available. "
-                        f"start_date cannot be before "
-                        f"{min_start_date.strftime('%d-%m-%Y')}."
-                    ]
-                }
-            )
 
         if end_date > today:
             raise serializers.ValidationError(
@@ -434,9 +433,20 @@ class ManagerProductSalesTrendQuerySerializer(serializers.Serializer):
                 {"date_range": ["start_date cannot be greater than end_date."]}
             )
 
+        max_end_date = start_date + relativedelta(years=1)
+        if end_date > max_end_date:
+            raise serializers.ValidationError(
+                {
+                    "date_range": [
+                        "Date range cannot exceed 1 year. "
+                        f"end_date must be on or before "
+                        f"{max_end_date.strftime('%d-%m-%Y')}."
+                    ]
+                }
+            )
+
         attrs["start_date"] = start_date
         attrs["end_date"] = end_date
-        attrs["min_start_date"] = min_start_date
         return attrs
 
 

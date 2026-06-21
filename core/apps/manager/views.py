@@ -551,7 +551,6 @@ class ManagerProductSalesTrendViewSet(viewsets.ViewSet):
 
         start_date = data["start_date"]
         end_date = data["end_date"]
-        min_start_date = data["min_start_date"]
         genders = data["gender"]
         item_type_ids = data["item_type"]
         sort = data["sort"]
@@ -590,7 +589,6 @@ class ManagerProductSalesTrendViewSet(viewsets.ViewSet):
             {
                 "start_date": start_date.strftime("%d-%m-%Y"),
                 "end_date": end_date.strftime("%d-%m-%Y"),
-                "min_start_date": min_start_date.strftime("%d-%m-%Y"),
                 "sort": sort,
                 "results": results,
             }
@@ -668,6 +666,27 @@ class ManagerStockItemsDetailsViewSet(viewsets.ModelViewSet):
 
     def destroy(self, request, *args, **kwargs):
         variant = self.get_object()
+
+        force = str(
+            request.query_params.get("force") or request.data.get("force") or ""
+        ).strip().lower() in ("1", "true", "yes")
+
+        bill_items_count = variant.bill_items.count()
+
+        if bill_items_count and not force:
+            return Response(
+                {
+                    "requires_confirmation": True,
+                    "bill_items_count": bill_items_count,
+                    "detail": (
+                        f"This item has been used in {bill_items_count} bill(s). "
+                        "Deleting will hide it from active stock views. "
+                        "Confirm to continue."
+                    ),
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+
         variant.is_active = False
         variant.save(update_fields=["is_active", "updated_at"])
 

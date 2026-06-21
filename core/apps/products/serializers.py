@@ -108,23 +108,43 @@ class ProductVariantDetailSerializer(serializers.ModelSerializer):
     
 
 class SizeDropdownSerializer(serializers.ModelSerializer):
+    name = serializers.SerializerMethodField()
+
     class Meta:
         model = Size
         fields = ["id", "name", "created_at"]
 
+    def get_name(self, obj):
+        return (obj.name or "").upper() if obj.name else ""
+
 
 class ItemTypeDropdownSerializer(serializers.ModelSerializer):
+    name = serializers.SerializerMethodField()
+
     class Meta:
         model = ItemType
         fields = ["id", "name", "created_at"]
 
+    def get_name(self, obj):
+        return (obj.name or "").title() if obj.name else ""
+
 
 class ColorDropdownSerializer(serializers.ModelSerializer):
+    name = serializers.SerializerMethodField()
+
     class Meta:
         model = Color
         fields = ["id", "name", "created_at"]
 
+    def get_name(self, obj):
+        return (obj.name or "").title() if obj.name else ""
+
 class BrandDropdownSerializer(serializers.ModelSerializer):
+    name = serializers.SerializerMethodField()
+
     class Meta:
         model = Company
         fields = ["id", "name", "created_at"]
+
+    def get_name(self, obj):
+        return (obj.name or "").title() if obj.name else ""
