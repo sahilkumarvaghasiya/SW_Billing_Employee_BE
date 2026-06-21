@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>{{ title }}</title>
+  <style>
+    @page { size: A4 landscape; margin: 1.2cm; }
+    body { font-family: Helvetica, Arial, sans-serif; font-size: 11px; color: #0f172a; }
+    h1 { font-size: 18px; margin: 0 0 4px; }
+    .meta { color: #64748b; font-size: 10px; margin-bottom: 14px; }
+    .summary-table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+    .summary-table td { border: 1px solid #e2e8f0; padding: 8px 10px; width: 25%; vertical-align: top; }
+    .summary-label { color: #64748b; font-size: 9px; text-transform: uppercase; letter-spacing: 0.04em; }
+    .summary-value { font-size: 14px; font-weight: 700; margin-top: 4px; }
+    h2 { font-size: 13px; margin: 0 0 8px; }
+    .bill-block { margin-bottom: 14px; page-break-inside: avoid; }
+    .bill-head { margin-bottom: 6px; }
+    .bill-title { font-weight: 700; font-size: 11px; }
+    .bill-meta { color: #64748b; font-size: 10px; margin-top: 2px; }
+    .lines-table, .bills-table { width: 100%; border-collapse: collapse; }
+    .lines-table th, .lines-table td, .bills-table th, .bills-table td {
+      border: 1px solid #e2e8f0; padding: 5px 7px; text-align: left;
+    }
+    .lines-table th, .bills-table th { background: #f8fafc; font-weight: 700; font-size: 10px; }
+    .num { text-align: right; white-space: nowrap; }
+    .empty { color: #64748b; padding: 12px 0; }
+    .no-lines { color: #64748b; font-size: 10px; font-style: italic; padding: 4px 0 8px; }
+  </style>
+</head>
+<body>
+  <h1>{{ title }}</h1>
+  <div class="meta">{{ vendor_label }} · {{ period_label }} · Generated {{ generated_at }}</div>
+
+  <table class="summary-table">
+    <tr>
+      <td>
+        <div class="summary-label">Bills</div>
+        <div class="summary-value">{{ summary.bills }}</div>
+      </td>
+      <td>
+        <div class="summary-label">Total billed</div>
+        <div class="summary-value">₹ {{ summary.total_billed }}</div>
+      </td>
+      <td>
+        <div class="summary-label">Total paid</div>
+        <div class="summary-value">₹ {{ summary.total_paid }}</div>
+      </td>
+      <td>
+        <div class="summary-label">Total pending</div>
+        <div class="summary-value">₹ {{ summary.total_pending }}</div>
+      </td>
+    </tr>
+  </table>
+
+  <h2>Vendor bills</h2>
+  {% if bills %}
+    {% for bill in bills %}
+    <section class="bill-block">
+      <div class="bill-head">
+        <div class="bill-title">{{ bill.vendor|default:"—" }} · {{ bill.stk_no }}</div>
+        <div class="bill-meta">
+          Bill date {{ bill.bill_date }} · Due {{ bill.due.label|default:"—" }} · {{ bill.status }}
+          · Total ₹ {{ bill.total }} · Paid ₹ {{ bill.paid }} · Pending ₹ {{ bill.pending }}
+        </div>
+      </div>
+      {% if bill.stock_lines %}
+      <table class="lines-table">
+        <thead>
+          <tr>
+            <th>Item type</th>
+            <th>Brand</th>
+            <th class="num">Qty</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for line in bill.stock_lines %}
+          <tr>
+            <td>{{ line.item_type|default:"—" }}</td>
+            <td>{{ line.brand|default:"—" }}</td>
+            <td class="num">{{ line.qty }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p class="no-lines">No stock lines recorded for this entry.</p>
+      {% endif %}
+    </section>
+    {% endfor %}
+  {% else %}
+  <p class="empty">No bills in this period.</p>
+  {% endif %}
+</body>
+</html>
+

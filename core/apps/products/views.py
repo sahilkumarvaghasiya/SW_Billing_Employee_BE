@@ -1,5 +1,6 @@
 from rest_framework import viewsets
 from apps.accounts.permissions import IsEmployee
+from apps.manager.permissions import IsManager
 from django_filters.rest_framework import DjangoFilterBackend
 from apps.products.models import Color, ItemType, ProductVariant, Size, Company
 from apps.products.serializers import (
@@ -42,7 +43,7 @@ class ProductVariantDetailView(viewsets.ReadOnlyModelViewSet):
 class SizeDropdownListView(viewsets.ReadOnlyModelViewSet):
     serializer_class = SizeDropdownSerializer
     pagination_class = DropdownPagination
-    permission_classes = [IsEmployee]
+    permission_classes = [IsEmployee | IsManager]
     http_method_names = ["get"]
 
     def get_queryset(self):
@@ -59,7 +60,7 @@ class SizeDropdownListView(viewsets.ReadOnlyModelViewSet):
 class ItemTypeDropdownListView(viewsets.ReadOnlyModelViewSet):
     serializer_class = ItemTypeDropdownSerializer
     pagination_class = DropdownPagination
-    permission_classes = [IsEmployee]
+    permission_classes = [IsEmployee | IsManager]
     http_method_names = ["get"]
 
     def get_queryset(self):
@@ -76,7 +77,7 @@ class ItemTypeDropdownListView(viewsets.ReadOnlyModelViewSet):
 class ColorDropdownListView(viewsets.ReadOnlyModelViewSet):
     serializer_class = ColorDropdownSerializer
     pagination_class = DropdownPagination
-    permission_classes = [IsEmployee]
+    permission_classes = [IsEmployee | IsManager]
     http_method_names = ["get"]
 
     def get_queryset(self):
@@ -93,7 +94,7 @@ class ColorDropdownListView(viewsets.ReadOnlyModelViewSet):
 class BrandDropdownListView(viewsets.ReadOnlyModelViewSet):
     serializer_class = BrandDropdownSerializer
     pagination_class = DropdownPagination
-    permission_classes = [IsEmployee]
+    permission_classes = [IsEmployee | IsManager]
     http_method_names = ["get"]
 
     def get_queryset(self):

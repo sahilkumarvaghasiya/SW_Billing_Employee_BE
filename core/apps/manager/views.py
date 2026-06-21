@@ -1,13 +1,21 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
+from django.http import HttpResponse
 from django.db import transaction
-from django.db.models import Count, F, Q, Sum
-from django.db.models.functions import TruncDate, TruncMonth, TruncYear
+from django.db.models import Count, DecimalField, F, Prefetch, Q, Sum
+from django.db.models.functions import Coalesce, TruncDate, TruncMonth, TruncYear
 from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
-from apps.manager.pagination import ManagerBillsPagination, ManagerEmployeesPagination
+from apps.manager.pagination import (
+    ManagerBillsPagination,
+    ManagerEmployeesPagination,
+    ManagerLowStockItemsPagination,
+    ManagerProductSalesTrendPagination,
+    ManagerStockItemsDetailsPagination,
+    ManagerVendorBillsPagination,
+)
 from apps.manager.permissions import IsManager
 from apps.manager.serializers import (
     ManagerBillListSerializer,
@@ -18,12 +26,30 @@ from apps.manager.serializers import (
     ManagerItemTypeSerializer,
     ManagerLowStockItemSerializer,
     ManagerPaymentConfigSerializer,
+    ManagerProductSalesTrendItemSerializer,
+    ManagerProductSalesTrendQuerySerializer,
+    ManagerStockItemDetailsSerializer,
+    ManagerStockItemUpdateSerializer,
+    ManagerStockThresholdSerializer,
+    ManagerVendorBillPaymentSerializer,
+    ManagerVendorBillSerializer,
 )
-from apps.manager.utils import under_threshold_variants
+from apps.manager.services.vendor_report_pdf import generate_vendor_report_pdf
+from apps.manager.utils import (
+    parse_id_list,
+    parse_timestamp_ordering,
+    under_threshold_variants,
+)
+from apps.manager.vendor_report import (
+    vendor_report_bill_rows,
+    vendor_report_entries,
+    vendor_report_summary,
+)
 from apps.accounts.models import User
-from apps.products.models import Company, ItemType, ProductVariant
+from apps.products.models import Company, ItemType, Product, ProductVariant
 from apps.sales.models import Bill, BillItem, PaymentConfig
 from apps.sales.utils import format_indian_amount
+from apps.vendors.models import StockEntry
 
 
 class ManagerOverviewViewSet(viewsets.ReadOnlyModelViewSet):
@@ -255,9 +281,8 @@ class ManagerEmployeeListViewSet(viewsets.ReadOnlyModelViewSet):
         sort = (self.request.query_params.get("sort") or "").strip().lower()
         ordering = "date_joined" if sort == "oldest" else "-date_joined"
 
-        return (
-            self.request.user.shop.users.filter(role=User.Role.EMPLOYEE)
-            .order_by(ordering)
+        return self.request.user.shop.users.filter(role=User.Role.EMPLOYEE).order_by(
+            ordering
         )
 
 
@@ -342,8 +367,7 @@ class ManagerStockSummaryViewSet(viewsets.ViewSet):
             out_of_stock=Count("id", filter=Q(quantity=0)),
             low_stock=Count(
                 "id",
-                filter=Q(quantity__gt=0)
-                & Q(quantity__lte=F("low_stock_threshold")),
+                filter=Q(quantity__gt=0) & Q(quantity__lte=F("low_stock_threshold")),
             ),
         )
 
@@ -370,7 +394,13 @@ class ManagerLowStockBrandViewSet(viewsets.ReadOnlyModelViewSet):
             .values_list("product__company", flat=True)
             .distinct()
         )
-        return Company.objects.filter(id__in=brand_ids).order_by("name")
+        queryset = Company.objects.filter(id__in=brand_ids)
+
+        search = (self.request.query_params.get("search") or "").strip()
+        if search:
+            queryset = queryset.filter(name__icontains=search)
+
+        return queryset.order_by("name")
 
 
 class ManagerLowStockItemTypeViewSet(viewsets.ReadOnlyModelViewSet):
@@ -386,28 +416,33 @@ class ManagerLowStockItemTypeViewSet(viewsets.ReadOnlyModelViewSet):
             .values_list("product__item_type", flat=True)
             .distinct()
         )
-        return ItemType.objects.filter(id__in=item_type_ids).order_by("name")
+        queryset = ItemType.objects.filter(id__in=item_type_ids)
+
+        search = (self.request.query_params.get("search") or "").strip()
+        if search:
+            queryset = queryset.filter(name__icontains=search)
+
+        return queryset.order_by("name")
 
 
 class ManagerLowStockItemsViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [IsManager]
     serializer_class = ManagerLowStockItemSerializer
+    pagination_class = ManagerLowStockItemsPagination
     http_method_names = ["get"]
 
     def get_queryset(self):
         params = self.request.query_params
-        brand = (params.get("brand") or "").strip()
-        item_type = (params.get("item_type") or "").strip()
+        brand_ids = parse_id_list(params, "brand")
+        item_type_ids = parse_id_list(params, "item_type")
 
-        queryset = (
-            under_threshold_variants()
-            .select_related("product", "product__company", "product__item_type")
+        queryset = under_threshold_variants().select_related(
+            "product", "product__company", "product__item_type"
         )
-
-        if brand:
-            queryset = queryset.filter(product__company_id=brand)
-        if item_type:
-            queryset = queryset.filter(product__item_type_id=item_type)
+        if brand_ids:
+            queryset = queryset.filter(product__company_id__in=brand_ids)
+        if item_type_ids:
+            queryset = queryset.filter(product__item_type_id__in=item_type_ids)
 
         return queryset.order_by("quantity")
 
@@ -481,6 +516,412 @@ class ManagerStaffPerformanceViewSet(viewsets.ModelViewSet):
                 "start_date": start_date.strftime("%d-%m-%Y"),
                 "end_date": end_date.strftime("%d-%m-%Y"),
                 "staff_performance": results,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class ManagerProductSalesTrendViewSet(viewsets.ViewSet):
+    permission_classes = [IsManager]
+    http_method_names = ["get"]
+
+    @staticmethod
+    def _build_query_data(params):
+        """Flatten repeated/comma-separated list params for the serializer."""
+        data = {
+            "start_date": params.get("start_date"),
+            "end_date": params.get("end_date"),
+            "sort": params.get("sort"),
+        }
+        for key in ("gender", "item_type"):
+            values = []
+            for raw in params.getlist(key):
+                values.extend(
+                    part.strip() for part in str(raw).split(",") if part.strip()
+                )
+            data[key] = values
+        return {k: v for k, v in data.items() if v not in (None, "")}
+
+    def list(self, request, *args, **kwargs):
+        query = ManagerProductSalesTrendQuerySerializer(
+            data=self._build_query_data(request.query_params)
+        )
+        query.is_valid(raise_exception=True)
+        data = query.validated_data
+
+        start_date = data["start_date"]
+        end_date = data["end_date"]
+        genders = data["gender"]
+        item_type_ids = data["item_type"]
+        sort = data["sort"]
+
+        queryset = BillItem.objects.filter(
+            bill__payment_status=Bill.PaymentStatus.PAID,
+            bill__created_at__date__gte=start_date,
+            bill__created_at__date__lte=end_date,
+        )
+
+        if genders:
+            queryset = queryset.filter(product_variant__product__gender__in=genders)
+        if item_type_ids:
+            queryset = queryset.filter(
+                product_variant__product__item_type_id__in=item_type_ids
+            )
+
+        ordering = "total_sold" if sort == "least_sold" else "-total_sold"
+
+        rows = (
+            queryset.values(
+                product_id=F("product_variant__product__id"),
+                gender=F("product_variant__product__gender"),
+                item_type_name=F("product_variant__product__item_type__name"),
+                brand_name=F("product_variant__product__company__name"),
+            )
+            .annotate(total_sold=Sum("quantity"))
+            .order_by(ordering, "product_id")
+        )
+
+        paginator = ManagerProductSalesTrendPagination()
+        page = paginator.paginate_queryset(rows, request, view=self)
+        results = ManagerProductSalesTrendItemSerializer(page, many=True).data
+
+        return paginator.get_paginated_response(
+            {
+                "start_date": start_date.strftime("%d-%m-%Y"),
+                "end_date": end_date.strftime("%d-%m-%Y"),
+                "sort": sort,
+                "results": results,
+            }
+        )
+
+
+class ManagerStockItemsDetailsViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsManager]
+    serializer_class = ManagerStockItemDetailsSerializer
+    pagination_class = ManagerStockItemsDetailsPagination
+    http_method_names = ["get", "patch", "delete"]
+
+    def get_queryset(self):
+        params = self.request.query_params
+
+        brand_ids = parse_id_list(params, "brand")
+        item_type_ids = parse_id_list(params, "item_type")
+        color_ids = parse_id_list(params, "color")
+        size_ids = parse_id_list(params, "size")
+
+        genders = []
+        valid_genders = {choice.value for choice in Product.GenderChoices}
+        for raw in params.getlist("gender"):
+            for part in str(raw).split(","):
+                part = part.strip().lower()
+                if part:
+                    genders.append(part)
+        invalid_genders = [g for g in genders if g not in valid_genders]
+        if invalid_genders:
+            raise ValidationError(
+                {
+                    "gender": [
+                        f"Invalid gender(s) {invalid_genders}. "
+                        f"Choose from {sorted(valid_genders)}."
+                    ]
+                }
+            )
+
+        queryset = ProductVariant.objects.filter(is_active=True).select_related(
+            "product",
+            "product__company",
+            "product__item_type",
+            "size",
+            "color",
+        )
+
+        if brand_ids:
+            queryset = queryset.filter(product__company_id__in=brand_ids)
+        if item_type_ids:
+            queryset = queryset.filter(product__item_type_id__in=item_type_ids)
+        if color_ids:
+            queryset = queryset.filter(color_id__in=color_ids)
+        if size_ids:
+            queryset = queryset.filter(size_id__in=size_ids)
+        if genders:
+            queryset = queryset.filter(product__gender__in=genders)
+
+        return queryset.order_by(*parse_timestamp_ordering(params))
+
+    def partial_update(self, request, *args, **kwargs):
+        variant = self.get_object()
+
+        serializer = ManagerStockItemUpdateSerializer(
+            instance=variant,
+            data=request.data,
+            partial=True,
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        return Response(
+            ManagerStockItemDetailsSerializer(variant).data,
+            status=status.HTTP_200_OK,
+        )
+
+    def destroy(self, request, *args, **kwargs):
+        variant = self.get_object()
+
+        force = str(
+            request.query_params.get("force") or request.data.get("force") or ""
+        ).strip().lower() in ("1", "true", "yes")
+
+        bill_items_count = variant.bill_items.count()
+
+        if bill_items_count and not force:
+            return Response(
+                {
+                    "requires_confirmation": True,
+                    "bill_items_count": bill_items_count,
+                    "detail": (
+                        f"This item has been used in {bill_items_count} bill(s). "
+                        "Deleting will hide it from active stock views. "
+                        "Confirm to continue."
+                    ),
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        variant.is_active = False
+        variant.save(update_fields=["is_active", "updated_at"])
+
+        return Response(
+            {"message": "Item deleted successfully."},
+            status=status.HTTP_200_OK,
+        )
+
+
+class ManagerStockThresholdViewSet(viewsets.ViewSet):
+    permission_classes = [IsManager]
+    http_method_names = ["get", "patch"]
+
+    def list(self, request, *args, **kwargs):
+        shop = request.user.shop
+        return Response(
+            {"default_low_stock_limit": shop.default_low_stock_limit},
+            status=status.HTTP_200_OK,
+        )
+
+    def partial_update(self, request, *args, **kwargs):
+        serializer = ManagerStockThresholdSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        shop = request.user.shop
+        reset = data.get("reset", False)
+        new_default = data.get("default_low_stock_limit")
+
+        with transaction.atomic():
+            if new_default is not None:
+                shop.default_low_stock_limit = new_default
+                shop.save(update_fields=["default_low_stock_limit", "updated_at"])
+
+            default_value = shop.default_low_stock_limit
+            updated_count = ProductVariant.objects.filter(is_active=True).update(
+                low_stock_threshold=default_value
+            )
+
+        return Response(
+            {
+                "default_low_stock_limit": default_value,
+                "updated_products": updated_count,
+                "reset": reset,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class ManagerVendorSummaryViewSet(viewsets.ViewSet):
+    permission_classes = [IsManager]
+    http_method_names = ["get"]
+
+    def list(self, request, *args, **kwargs):
+        today = timezone.localdate()
+        week_end = today + timedelta(days=7)
+
+        pending = StockEntry.objects.filter(is_fully_paid=False)
+
+        total_pending = pending.aggregate(
+            amount=Coalesce(
+                Sum(
+                    F("total_amount") - Coalesce(F("paid_amount"), Decimal("0.00")),
+                    output_field=DecimalField(max_digits=14, decimal_places=2),
+                ),
+                Decimal("0.00"),
+                output_field=DecimalField(max_digits=14, decimal_places=2),
+            )
+        )["amount"]
+
+        pending_bills = pending.count()
+        overdue = pending.filter(due_date__isnull=False, due_date__lt=today).count()
+        due_this_week = pending.filter(
+            due_date__isnull=False,
+            due_date__gte=today,
+            due_date__lte=week_end,
+        ).count()
+
+        return Response(
+            {
+                "total_pending": format_indian_amount(total_pending),
+                "pending_bills": pending_bills,
+                "overdue": overdue,
+                "due_this_week": due_this_week,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class ManagerVendorReportViewSet(viewsets.ViewSet):
+    permission_classes = [IsManager]
+    http_method_names = ["get"]
+
+    def list(self, request, *args, **kwargs):
+        entries, start_date, end_date, _vendor_ids = vendor_report_entries(
+            request.query_params
+        )
+        summary = vendor_report_summary(entries)
+
+        return Response(
+            {
+                "start_date": start_date.strftime("%d-%m-%Y") if start_date else None,
+                "end_date": end_date.strftime("%d-%m-%Y") if end_date else None,
+                **summary,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class ManagerVendorReportPdfViewSet(viewsets.ViewSet):
+    permission_classes = [IsManager]
+    http_method_names = ["get"]
+
+    def list(self, request, *args, **kwargs):
+        params = request.query_params
+        entries, start_date, end_date, vendor_ids = vendor_report_entries(params)
+        summary = vendor_report_summary(entries)
+        bills = vendor_report_bill_rows(entries)
+
+        if vendor_ids:
+            vendor_label = f"{len(vendor_ids)} selected vendor(s)"
+        else:
+            vendor_label = "All vendors"
+
+        if start_date and end_date:
+            period_label = (
+                f"{start_date.strftime('%d-%m-%Y')} – {end_date.strftime('%d-%m-%Y')}"
+            )
+        elif start_date:
+            period_label = f"From {start_date.strftime('%d-%m-%Y')}"
+        elif end_date:
+            period_label = f"Until {end_date.strftime('%d-%m-%Y')}"
+        else:
+            period_label = "All dates"
+
+        title = "Vendor report"
+        pdf_bytes = generate_vendor_report_pdf(
+            title=title,
+            period_label=period_label,
+            vendor_label=vendor_label,
+            summary=summary,
+            bills=bills,
+        )
+
+        filename = "vendor-report.pdf"
+        if start_date and end_date:
+            filename = (
+                f"vendor-report-{start_date.strftime('%Y%m%d')}-"
+                f"{end_date.strftime('%Y%m%d')}.pdf"
+            )
+
+        response = HttpResponse(pdf_bytes, content_type="application/pdf")
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return response
+
+
+class ManagerVendorBillsViewSet(viewsets.ReadOnlyModelViewSet):
+    permission_classes = [IsManager]
+    serializer_class = ManagerVendorBillSerializer
+    pagination_class = ManagerVendorBillsPagination
+    http_method_names = ["get", "patch"]
+
+    def get_queryset(self):
+        params = self.request.query_params
+
+        search = (params.get("search") or "").strip()
+        status_param = (params.get("status") or "").strip().lower()
+        start_date_param = (params.get("start_date") or "").strip()
+        end_date_param = (params.get("end_date") or "").strip()
+        sort = (params.get("sort") or "").strip().lower()
+
+        queryset = (
+            StockEntry.objects.select_related("vendor")
+            .prefetch_related(
+                Prefetch(
+                    "stock_variants",
+                    queryset=ProductVariant.objects.select_related(
+                        "product", "product__item_type", "product__company"
+                    ),
+                )
+            )
+        )
+
+        if search:
+            queryset = queryset.filter(vendor__name__icontains=search)
+
+        if status_param:
+            valid_status = {choice.value for choice in StockEntry.StatusChoices}
+            if status_param not in valid_status:
+                raise ValidationError(
+                    {"status": [f"Invalid status. Choose from {sorted(valid_status)}."]}
+                )
+            queryset = queryset.filter(status=status_param)
+
+        if start_date_param:
+            try:
+                start_date = datetime.strptime(start_date_param, "%d-%m-%Y").date()
+            except ValueError as exc:
+                raise ValidationError(
+                    {"start_date": ["Invalid date format. Use DD-MM-YYYY."]}
+                ) from exc
+            queryset = queryset.filter(created_at__date__gte=start_date)
+
+        if end_date_param:
+            try:
+                end_date = datetime.strptime(end_date_param, "%d-%m-%Y").date()
+            except ValueError as exc:
+                raise ValidationError(
+                    {"end_date": ["Invalid date format. Use DD-MM-YYYY."]}
+                ) from exc
+            queryset = queryset.filter(created_at__date__lte=end_date)
+
+        ordering = "created_at" if sort == "oldest" else "-created_at"
+        return queryset.order_by(ordering)
+
+    def partial_update(self, request, *args, **kwargs):
+        entry = self.get_object()
+
+        serializer = ManagerVendorBillPaymentSerializer(
+            data=request.data,
+            context={"entry": entry},
+        )
+        serializer.is_valid(raise_exception=True)
+
+        amount = serializer.validated_data["amount"]
+        paid = entry.paid_amount or Decimal("0.00")
+
+        with transaction.atomic():
+            entry.paid_amount = paid + amount
+            entry.save()
+
+        return Response(
+            {
+                "message": "Payment recorded successfully.",
+                "bill": ManagerVendorBillSerializer(entry).data,
             },
             status=status.HTTP_200_OK,
         )
