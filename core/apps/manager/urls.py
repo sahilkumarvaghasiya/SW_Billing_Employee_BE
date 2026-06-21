@@ -11,13 +11,32 @@ from apps.manager.views import (
     ManagerLowStockItemsViewSet,
     ManagerOverviewViewSet,
     ManagerPaymentConfigViewSet,
+    ManagerProductSalesTrendViewSet,
     ManagerStaffPerformanceViewSet,
+    ManagerStockItemsDetailsViewSet,
     ManagerStockSummaryViewSet,
+    ManagerStockThresholdViewSet,
+    ManagerVendorBillsViewSet,
+    ManagerVendorReportPdfViewSet,
+    ManagerVendorReportViewSet,
+    ManagerVendorSummaryViewSet,
 )
 
 
 router = DefaultRouter()
-router.register("payment-configs", ManagerPaymentConfigViewSet, basename="payment-config")
+router.register(
+    "payment-configs", ManagerPaymentConfigViewSet, basename="payment-config"
+)
+router.register(
+    "stock/items-details",
+    ManagerStockItemsDetailsViewSet,
+    basename="stock-items-details",
+)
+router.register(
+    "vendors/bills",
+    ManagerVendorBillsViewSet,
+    basename="vendor-bills",
+)
 
 
 urlpatterns = [
@@ -30,6 +49,14 @@ urlpatterns = [
         ManagerStaffPerformanceViewSet.as_view({"get": "list"}),
     ),
     path("employees/limit/", ManagerEmployeeLimitViewSet.as_view({"get": "list"})),
+    path(
+        "employees/<int:pk>/block/",
+        ManagerEmployeeManageViewSet.as_view({"patch": "partial_update"}),
+    ),
+    path(
+        "employees/<int:pk>/delete/",
+        ManagerEmployeeManageViewSet.as_view({"delete": "destroy"}),
+    ),
     path("stock-summary/", ManagerStockSummaryViewSet.as_view({"get": "list"})),
     path(
         "stock/low-stock/brands/",
@@ -40,16 +67,30 @@ urlpatterns = [
         ManagerLowStockItemTypeViewSet.as_view({"get": "list"}),
     ),
     path(
-        "stock/low-stock/items/",
+        "stock/low-stock/items-attention/",
         ManagerLowStockItemsViewSet.as_view({"get": "list"}),
     ),
     path(
-        "employees/<int:pk>/block/",
-        ManagerEmployeeManageViewSet.as_view({"patch": "partial_update"}),
+        "stock/sales-trend/",
+        ManagerProductSalesTrendViewSet.as_view({"get": "list"}),
     ),
     path(
-        "employees/<int:pk>/delete/",
-        ManagerEmployeeManageViewSet.as_view({"delete": "destroy"}),
+        "settings/stock-threshold/",
+        ManagerStockThresholdViewSet.as_view(
+            {"get": "list", "patch": "partial_update"}
+        ),
+    ),
+    path(
+        "vendors/summary/",
+        ManagerVendorSummaryViewSet.as_view({"get": "list"}),
+    ),
+    path(
+        "vendors/reports/preview/",
+        ManagerVendorReportViewSet.as_view({"get": "list"}),
+    ),
+    path(
+        "vendors/reports/pdf/",
+        ManagerVendorReportPdfViewSet.as_view({"get": "list"}),
     ),
     path("", include(router.urls)),
 ]

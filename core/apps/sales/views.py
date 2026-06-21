@@ -10,6 +10,7 @@ from rest_framework import viewsets
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from apps.accounts.permissions import IsEmployee
+from apps.manager.permissions import IsManager
 from apps.products.models import ProductVariant
 from apps.sales.notifications import (
     handle_stock_level_notification,
@@ -31,6 +32,7 @@ import os
 from apps.sales.services.pdf_service import generate_bill_pdf
 from apps.sales.services.whatsapp_service import upload_pdf_to_meta, send_invoice_template_message
 from django.db.models import Exists, OuterRef
+from django.shortcuts import get_object_or_404
 
 class BarcodeProductLookupListView(viewsets.ReadOnlyModelViewSet):
     serializer_class = BarcodeLookupProductSerializer
@@ -403,7 +405,7 @@ class BillCreateViewSet(viewsets.ModelViewSet):
 
 class NotificationUnreadListViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = NotificationUnreadSerializer
-    permission_classes = [IsEmployee]
+    permission_classes = [IsEmployee | IsManager]
     http_method_names = ["get"]
 
     NOTIFICATION_AUTO_DELETE_AFTER = getattr(settings, 'NOTIFICATION_AUTO_DELETE_AFTER_HOURS', 48)
@@ -443,11 +445,25 @@ class NotificationUnreadListViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 class NotificationMarkSeenViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsEmployee]
+    permission_classes = [IsEmployee | IsManager]
     http_method_names = ["post"]
     queryset = Notification.objects.none()
     
     def create(self, request, *args, **kwargs):
+        # Dashboard: POST { "notification_id": <id> } — mark one alert as seen.
+        # Employee app: POST {} — mark all unseen (openInbox behavior).
+        notification_id = request.data.get("notification_id") or request.data.get("id")
+
+        if notification_id is not None:
+            notification = get_object_or_404(Notification, pk=notification_id)
+            NotificationRead.objects.get_or_create(
+                notification=notification,
+                user=request.user,
+            )
+            return Response(
+                {"message": "Notification marked as seen."},
+                status=status.HTTP_200_OK,
+            )
 
         notifications = Notification.objects.exclude(
             read_statuses__user=request.user
