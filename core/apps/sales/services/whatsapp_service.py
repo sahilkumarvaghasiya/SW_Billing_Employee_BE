@@ -114,6 +114,7 @@ def send_bill_via_whatsapp(bill, shop: Shop):
 
     items = bill.bill_items.select_related(
         "product_variant__product__item_type",
+        "product_variant__product__company",
         "product_variant__size",
         "product_variant__color",
     ).order_by("created_at")

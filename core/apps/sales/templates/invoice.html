@@ -1,3 +1,4 @@
+{% load sales_filters %}
 <!DOCTYPE html>
 <html>
 <head>
@@ -7,338 +8,329 @@
 
         body {
             font-family: Helvetica, Arial, sans-serif;
-            font-size: 12px;
-            color: #222;
+            font-size: 11px;
+            color: #111;
             background: #fff;
-            padding: 34px 38px;
-            line-height: 1.55;
+            line-height: 1.45;
         }
+
+        @page { margin: 14mm 12mm; }
 
         table { width: 100%; border-collapse: collapse; }
 
-        /* xhtml2pdf supports @page basics */
-        @page { margin: 18mm 14mm; }
-
-        .accent-bar {
-            background: #2c2c2c;
-            height: 6px;
-            width: 100%;
-            margin-bottom: 18px;
-        }
-
-        .header-wrap {
-            border-bottom: 1px solid #ddd;
-            padding-bottom: 14px;
-            margin-bottom: 18px;
+        .invoice-box {
+            border: 1.5px solid #111;
+            padding: 14px 16px;
         }
 
         .shop-name {
-            font-family: Georgia, "Times New Roman", Times, serif;
-            font-size: 24px;
+            font-size: 20px;
             font-weight: bold;
-            color: #111;
             text-align: center;
-            letter-spacing: 0.2px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #000;
         }
 
-        .shop-header {
+        .shop-meta {
             text-align: center;
-            margin-bottom: 10px;
-        }
-
-        .shop-divider {
-            width: 120px;
-            margin: 8px auto 0 auto;
-            border-top: 2px solid #2c2c2c;
-        }
-
-        .subtext {
-            font-size: 10.8px;
-            color: #666;
+            font-size: 10.5px;
+            color: #333;
             margin-top: 4px;
-            line-height: 1.6;
+            line-height: 1.55;
         }
 
-        .subtext.center { text-align: center; }
-
-        .right { text-align: right; }
-        .muted { color: #888; }
-
-        .invoice-label {
-            font-size: 10px;
-            font-weight: bold;
-            color: #888;
-            letter-spacing: 1.6px;
-            text-transform: uppercase;
+        .rule {
+            border-top: 1px solid #111;
+            margin: 10px 0;
         }
 
-        .invoice-number {
-            font-size: 18px;
-            font-weight: bold;
-            color: #111;
-            margin-top: 2px;
+        .rule-double {
+            border-top: 2px solid #111;
+            margin: 8px 0 10px 0;
         }
 
-        .invoice-date {
-            font-size: 10.8px;
-            color: #777;
-            margin-top: 2px;
+        .title-row td {
+            padding: 6px 0 8px 0;
+            vertical-align: top;
         }
 
-        .box {
-            border: 1px solid #e6e6e6;
-            background: #fafafa;
-            padding: 12px 12px;
-        }
-
-        .box-title {
-            font-size: 9px;
-            font-weight: bold;
-            text-transform: uppercase;
-            letter-spacing: 1.4px;
-            color: #999;
-            padding-bottom: 6px;
-            margin-bottom: 8px;
-            border-bottom: 1px solid #eee;
-        }
-
-        .name {
+        .doc-title {
             font-size: 13px;
             font-weight: bold;
-            color: #111;
-            margin-bottom: 2px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
         }
 
-        .line {
-            font-size: 11.2px;
-            color: #444;
+        .meta-label {
+            font-size: 9.5px;
+            color: #555;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+        }
+
+        .meta-value {
+            font-size: 11px;
+            font-weight: bold;
+            color: #000;
+            margin-top: 1px;
+        }
+
+        .meta-line {
+            font-size: 10.5px;
             margin-top: 2px;
         }
 
-        .badge {
-            font-size: 10px;
-            font-weight: bold;
-            padding: 2px 8px;
-        }
-
-        .badge-paid { background: #e6f9e6; color: #1e8c1e; }
-        .badge-failed { background: #fce8e8; color: #c0392b; }
-
-        .items {
-            border: 1px solid #efefef;
-            margin-top: 14px;
-            margin-bottom: 16px;
-        }
-
-        .items thead tr { background: #2c2c2c; }
+        .right { text-align: right; }
 
         .items th {
-            color: #fff;
-            font-size: 9.8px;
+            border: 1px solid #111;
+            background: #f2f2f2;
+            font-size: 9.5px;
             font-weight: bold;
             text-transform: uppercase;
-            letter-spacing: 0.7px;
-            padding: 9px 10px;
+            padding: 7px 6px;
             text-align: left;
         }
 
-        .items th.r, .items td.r { text-align: right; }
+        .items th.r,
+        .items td.r {
+            text-align: right;
+        }
+
+        .items th.c {
+            text-align: center;
+        }
 
         .items td {
-            padding: 9px 10px;
-            font-size: 11.8px;
-            color: #222;
-            border-bottom: 1px solid #efefef;
+            border: 1px solid #ccc;
+            padding: 7px 6px;
+            font-size: 10.5px;
+            vertical-align: top;
         }
 
-        .items tr.even td { background: #f9f9f9; }
-        .items tbody tr:last-child td { border-bottom: none; }
+        .items td.sr {
+            text-align: center;
+            color: #555;
+            width: 26px;
+        }
 
-        .col-sr { width: 28px; color: #aaa; font-size: 10.5px; }
-        .col-product { font-weight: bold; }
-        .col-disc { color: #c0392b; }
-        .col-total { font-weight: bold; }
-
-        .section-title {
-            font-size: 9px;
+        .item-name {
             font-weight: bold;
-            text-transform: uppercase;
-            letter-spacing: 1.4px;
-            color: #999;
-            border-bottom: 1px solid #eee;
-            padding-bottom: 6px;
-            margin-bottom: 10px;
+            color: #000;
         }
 
-        .summary {
-            border: 1px solid #e6e6e6;
+        .item-sub {
+            font-size: 9.5px;
+            color: #666;
+            margin-top: 2px;
         }
 
-        .summary td {
-            padding: 9px 12px;
+        .totals td {
+            padding: 4px 0;
+            font-size: 10.5px;
+        }
+
+        .totals .label {
+            text-align: right;
+            padding-right: 12px;
+            color: #333;
+        }
+
+        .totals .value {
+            text-align: right;
+            width: 110px;
+            font-weight: bold;
+        }
+
+        .totals .discount .value {
+            color: #b00020;
+        }
+
+        .grand-total td {
+            border-top: 1.5px solid #111;
+            border-bottom: 1.5px solid #111;
+            padding: 8px 0;
+            margin-top: 4px;
             font-size: 12px;
-            border-bottom: 1px solid #efefef;
-        }
-
-        .summary td.val { text-align: right; }
-        .summary .disc td { color: #c0392b; }
-
-        .summary .grand td {
-            background: #2c2c2c;
-            color: #fff;
             font-weight: bold;
-            font-size: 13px;
-            border-bottom: none;
-            padding: 11px 12px;
         }
 
         .footer {
-            margin-top: 20px;
-            border-top: 1px dashed #ddd;
-            padding-top: 12px;
+            margin-top: 14px;
+            border-top: 1px dashed #999;
+            padding-top: 10px;
+            text-align: center;
         }
 
-        .thanks { font-size: 12.8px; font-weight: bold; color: #111; }
-        .foot-sub { font-size: 10.8px; color: #777; margin-top: 3px; }
-        .foot-right { text-align: right; font-size: 10px; color: #bbb; }
+        .thanks {
+            font-size: 11.5px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+
+        .foot-note {
+            font-size: 9.5px;
+            color: #666;
+            margin-top: 4px;
+        }
+
+        .status-paid {
+            color: #0a7a0a;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .status-failed {
+            color: #b00020;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
     </style>
 </head>
 <body>
 
-    <div class="accent-bar"></div>
+<div class="invoice-box">
 
-    <div class="header-wrap">
-        <div class="shop-header">
-            <div class="shop-name">{{ bill.shop.name }}</div>
-            <div class="subtext center">
-                {% if bill.shop.mobile_number %}{{ bill.shop.mobile_number }}<br />{% endif %}
-                {% if bill.shop.address %}{{ bill.shop.address }}<br />{% endif %}
-                {% if bill.shop.gst_number %}GST No: {{ bill.shop.gst_number }}{% endif %}
-            </div>
-            <div class="shop-divider"></div>
-        </div>
-
-        <table cellpadding="0" cellspacing="0">
-            <tr>
-                <td style="width: 60%;"></td>
-                <td class="right" style="width: 40%; vertical-align: top;">
-                    <div class="invoice-label">Tax Invoice</div>
-                    <div class="invoice-number"># {{ bill.bill_number }}</div>
-                    <div class="invoice-date">{{ bill.created_at|date:"d M Y, h:i A" }}</div>
-                </td>
-            </tr>
-        </table>
+    <!-- Shop header -->
+    <div class="shop-name">{{ shop.name|default:"Retail Shop" }}</div>
+    <div class="shop-meta">
+        {% if shop.address %}{{ shop.address }}<br />{% endif %}
+        {% if shop.mobile_number %}Ph: {{ shop.mobile_number }}{% endif %}
+        {% if shop.gst_number %}{% if shop.mobile_number %} &nbsp;|&nbsp; {% endif %}GSTIN: {{ shop.gst_number }}{% endif %}
     </div>
 
+    <div class="rule-double"></div>
+
+    <!-- Invoice title + bill meta -->
+    <table cellpadding="0" cellspacing="0" class="title-row">
+        <tr>
+            <td style="width: 50%;">
+                <div class="doc-title">Tax Invoice</div>
+            </td>
+            <td class="right" style="width: 50%;">
+                <div class="meta-label">Bill No.</div>
+                <div class="meta-value">{{ bill.bill_number }}</div>
+                <div class="meta-line">{{ bill.created_at|date:"d-m-Y" }} &nbsp; {{ bill.created_at|date:"h:i A" }}</div>
+            </td>
+        </tr>
+    </table>
+
+    <div class="rule"></div>
+
+    <!-- Customer details -->
     <table cellpadding="0" cellspacing="0">
         <tr>
-            <td style="width: 49%; vertical-align: top;">
-                <div class="box">
-                    <div class="box-title">Bill To</div>
-                    <div class="name">{{ bill.customer.name|default:"—" }}</div>
-                    <div class="line">{% if bill.customer.phone %}{{ bill.customer.phone }}{% else %}<span class="muted">—</span>{% endif %}</div>
-                    {% if bill.customer.address %}
-                    <div class="line">{{ bill.customer.address }}</div>
-                    {% endif %}
-                </div>
+            <td style="width: 55%; vertical-align: top;">
+                <div class="meta-label">Customer</div>
+                <div class="meta-value">{{ bill.customer.name|default:"Walk-in Customer" }}</div>
+                {% if bill.customer.phone %}
+                <div class="meta-line">Mob: {{ bill.customer.phone }}</div>
+                {% endif %}
+                {% if bill.customer.address %}
+                <div class="meta-line">{{ bill.customer.address }}</div>
+                {% endif %}
             </td>
-            <td style="width: 2%;"></td>
-            <td style="width: 49%; vertical-align: top;">
-                <div class="box">
-                    <div class="box-title">Payment Details</div>
-                    <div class="line"><strong>Method:</strong> {{ bill.payment_method|title }}</div>
-                    <div class="line" style="margin-top: 3px;">
-                        <strong>Status:</strong>
-                        {% if bill.payment_status == "paid" %}
-                            <span class="badge badge-paid">Paid</span>
-                        {% else %}
-                            <span class="badge badge-failed">Failed</span>
-                        {% endif %}
-                    </div>
-                    {% if bill.paid_amount and bill.paid_amount != bill.total_amount %}
-                    <div class="line" style="margin-top: 3px;"><strong>Paid Amount:</strong> Rs. {{ bill.paid_amount }}</div>
-                    {% endif %}
-                    {% if bill.notes %}
-                    <div class="line" style="margin-top: 6px; color: #777;">{{ bill.notes }}</div>
+            <td class="right" style="width: 45%; vertical-align: top;">
+                <div class="meta-label">Payment</div>
+                <div class="meta-value">
+                    {% if bill.payment_method == "qr" %}UPI / QR{% else %}{{ bill.payment_method|title }}{% endif %}
+                </div>
+                <div class="meta-line">
+                    Status:
+                    {% if bill.payment_status == "paid" %}
+                        <span class="status-paid">Paid</span>
+                    {% else %}
+                        <span class="status-failed">Unpaid</span>
                     {% endif %}
                 </div>
             </td>
         </tr>
     </table>
 
-    <table class="items" cellpadding="0" cellspacing="0">
+    <div class="rule" style="margin-top: 12px;"></div>
+
+    <!-- Line items -->
+    <table class="items" cellpadding="0" cellspacing="0" style="margin-top: 8px;">
         <thead>
             <tr>
-                <th style="width: 28px;">#</th>
-                <th>Product</th>
-                <th class="r" style="width: 52px;">Qty</th>
-                <th class="r" style="width: 88px;">Price</th>
-                <th class="r" style="width: 92px;">Discount</th>
-                <th class="r" style="width: 92px;">Total</th>
+                <th class="c" style="width: 28px;">Sr.</th>
+                <th>Particulars</th>
+                <th class="c" style="width: 36px;">Qty</th>
+                <th class="r" style="width: 72px;">Rate (Rs.)</th>
+                <th class="r" style="width: 80px;">Amount (Rs.)</th>
             </tr>
         </thead>
         <tbody>
             {% for item in items %}
-            <tr {% if forloop.counter|divisibleby:2 %}class="even"{% endif %}>
-                <td class="col-sr">{{ forloop.counter }}</td>
-                <td class="col-product">{{ item.product_variant.product.item_type.name }}</td>
-                <td class="r">{{ item.quantity }}</td>
-                <td class="r">Rs. {{ item.price }}</td>
-                <td class="r col-disc">
+            <tr>
+                <td class="sr">{{ forloop.counter }}</td>
+                <td>
+                    <div class="item-name">{{ item.product_variant.product.item_type.name|default:"Item" }}</div>
+                    {% if item.product_variant.size or item.product_variant.color or item.product_variant.product.company %}
+                    <div class="item-sub">
+                        {% if item.product_variant.product.company %}{{ item.product_variant.product.company.name|title }}{% endif %}
+                        {% if item.product_variant.size %}{% if item.product_variant.product.company %} &bull; {% endif %}Size: {{ item.product_variant.size.name|upper }}{% endif %}
+                        {% if item.product_variant.color %}{% if item.product_variant.product.company or item.product_variant.size %} &bull; {% endif %}{{ item.product_variant.color.name|title }}{% endif %}
+                    </div>
+                    {% endif %}
                     {% if item.custom_amount and item.custom_amount != "0.00" %}
-                        Rs. {{ item.custom_amount }}
-                    {% else %}
-                        —
+                    <div class="item-sub">Discount: Rs. {{ item.custom_amount|indian_amount }}</div>
                     {% endif %}
                 </td>
-                <td class="r col-total">Rs. {{ item.total_price }}</td>
+                <td class="c">{{ item.quantity }}</td>
+                <td class="r">{{ item.price|indian_amount }}</td>
+                <td class="r">{{ item.total_price|indian_amount }}</td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
 
-    <table cellpadding="0" cellspacing="0">
+    <!-- Totals -->
+    <table cellpadding="0" cellspacing="0" style="margin-top: 10px;">
         <tr>
-            <td style="width: 50%; vertical-align: top; padding-right: 14px;">
-                <div class="section-title">Payment Info</div>
-                <div class="line"><strong>Method:</strong> {{ bill.payment_method|title }}</div>
+            <td style="width: 55%; vertical-align: top;">
+                {% if bill.notes %}
+                <div class="meta-label">Remarks</div>
+                <div class="meta-line" style="margin-top: 3px;">{{ bill.notes }}</div>
+                {% endif %}
             </td>
-            <td style="width: 50%; vertical-align: top;">
-                <table class="summary" cellpadding="0" cellspacing="0">
+            <td style="width: 45%; vertical-align: top;">
+                <table class="totals" cellpadding="0" cellspacing="0">
                     <tr>
-                        <td>Subtotal</td>
-                        <td class="val">Rs. {{ bill.subtotal }}</td>
+                        <td class="label">Sub Total</td>
+                        <td class="value">Rs. {{ bill.subtotal|indian_amount }}</td>
                     </tr>
                     {% if bill.custom_amount and bill.custom_amount != "0.00" %}
-                    <tr class="disc">
-                        <td>Custom Amount{% if bill.discount_percent and bill.discount_percent != "0.00" %} ({{ bill.discount_percent }}%){% endif %}</td>
-                        <td class="val">Rs. {{ bill.custom_amount }}</td>
+                    <tr class="discount">
+                        <td class="label">
+                            Discount{% if bill.discount_percent and bill.discount_percent != "0.00" %} ({{ bill.discount_percent }}%){% endif %}
+                        </td>
+                        <td class="value">Rs. {{ bill.custom_amount|indian_amount }}</td>
                     </tr>
                     {% endif %}
+                    <tr class="grand-total">
+                        <td class="label">Grand Total</td>
+                        <td class="value">Rs. {{ bill.total_amount|indian_amount }}</td>
+                    </tr>
+                    {% if bill.paid_amount and bill.paid_amount != bill.total_amount %}
                     <tr>
-                        <td>Paid</td>
-                        <td class="val">Rs. {{ bill.paid_amount }}</td>
+                        <td class="label">Amount Paid</td>
+                        <td class="value">Rs. {{ bill.paid_amount|indian_amount }}</td>
                     </tr>
-                    <tr class="grand">
-                        <td>Grand Total</td>
-                        <td class="val">Rs. {{ bill.total_amount }}</td>
-                    </tr>
+                    {% endif %}
                 </table>
             </td>
         </tr>
     </table>
 
     <div class="footer">
-        <table cellpadding="0" cellspacing="0">
-            <tr>
-                <td style="vertical-align: top;">
-                    <div class="thanks">Thank you for shopping!</div>
-                    <div class="foot-sub">We look forward to seeing you again.</div>
-                </td>
-                <td class="foot-right" style="vertical-align: top;">{{ bill.shop.name }}</td>
-            </tr>
-        </table>
+        <div class="thanks">Thank you! Visit again.</div>
+        <div class="foot-note">This is a computer-generated invoice and does not require a signature.</div>
     </div>
+
+</div>
 
 </body>
 </html>
