@@ -9,6 +9,7 @@ from django.db.models import Q, Sum
 from rest_framework import viewsets
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
+from rest_framework.views import APIView
 from apps.accounts.permissions import IsEmployee
 from apps.manager.permissions import IsManager
 from apps.products.models import ProductVariant
@@ -28,9 +29,11 @@ from apps.sales.serializers import (
     SalesHistoryListSerializer,
 )
 from apps.sales.utils import format_indian_amount
-import os
-from apps.sales.services.pdf_service import generate_bill_pdf
-from apps.sales.services.whatsapp_service import upload_pdf_to_meta, send_invoice_template_message
+from apps.sales.services.whatsapp_service import (
+    BILL_SEND_FAILED_MESSAGE,
+    WhatsAppSendError,
+    send_bill_via_whatsapp,
+)
 from django.db.models import Exists, OuterRef
 from django.shortcuts import get_object_or_404
 
@@ -337,26 +340,6 @@ class BillCreateViewSet(viewsets.ModelViewSet):
             )
 
         BillItem.objects.bulk_create(bill_items)
-        try:
-            pass
-            # created_items = bill.bill_items.all().order_by("created_at")
-            # pdf_path = generate_bill_pdf(
-            #     bill=bill,
-            #     items=created_items,
-            # )
-            # media_id = upload_pdf_to_meta(pdf_path, shop=request.user.shop)
-            # send_invoice_template_message(
-            #     shop=request.user.shop,
-            #     phone=bill.customer.phone,
-            #     media_id=media_id,
-            #     customer_name=bill.customer.name,
-            #     bill_number=bill.bill_number,
-            # )
-            # if os.path.exists(pdf_path):
-            #     os.remove(pdf_path)
-
-        except Exception as e:
-            print(f"WhatsApp invoice send failed: {str(e)}")
 
         return Response(
             {
@@ -379,6 +362,7 @@ class BillCreateViewSet(viewsets.ModelViewSet):
                 "payment": {
                     "method": bill.payment_method,
                     "status": bill.payment_status,
+                    "whatsapp_status": bill.whatsapp_status,
                     "selected_payment_config_id": (
                         str(bill.selected_payment_config.id)
                         if bill.selected_payment_config
@@ -402,6 +386,60 @@ class BillCreateViewSet(viewsets.ModelViewSet):
             },
             status=status.HTTP_201_CREATED,
         )
+
+
+class SendWhatsAppInvoiceView(APIView):
+    permission_classes = [IsEmployee]
+    http_method_names = ["post"]
+
+    def post(self, request):
+        bill_id = request.data.get("bill_id")
+        if not bill_id:
+            raise ValidationError({"bill_id": ["This field is required."]})
+
+        bill = get_object_or_404(
+            Bill.objects.select_related("customer"),
+            id=bill_id,
+            is_active=True,
+        )
+
+        shop = request.user.shop
+        if not shop:
+            raise ValidationError({"shop": ["Shop is not configured for this user."]})
+
+        if not shop.whatsapp_phone_number_id or not shop.whatsapp_access_token:
+            bill.whatsapp_status = Bill.WhatsAppStatus.FAILED
+            bill.save(update_fields=["whatsapp_status", "updated_at"])
+            raise ValidationError(
+                {"message": ["WhatsApp is not configured for this shop."]}
+            )
+
+        try:
+            whatsapp_response = send_bill_via_whatsapp(bill=bill, shop=shop)
+        except WhatsAppSendError as exc:
+            bill.whatsapp_status = Bill.WhatsAppStatus.FAILED
+            bill.save(update_fields=["whatsapp_status", "updated_at"])
+            raise ValidationError({"message": [exc.user_message]}) from exc
+        except Exception:
+            bill.whatsapp_status = Bill.WhatsAppStatus.FAILED
+            bill.save(update_fields=["whatsapp_status", "updated_at"])
+            raise ValidationError({"message": [BILL_SEND_FAILED_MESSAGE]}) from None
+
+        bill.whatsapp_status = Bill.WhatsAppStatus.SENT
+        bill.save(update_fields=["whatsapp_status", "updated_at"])
+
+        return Response(
+            {
+                "message": "Invoice sent on WhatsApp.",
+                "bill_id": str(bill.id),
+                "bill_number": bill.bill_number,
+                "customer_phone": bill.customer.phone if bill.customer else None,
+                "whatsapp_status": bill.whatsapp_status,
+                "whatsapp_message_id": whatsapp_response.get("messages", [{}])[0].get("id"),
+            },
+            status=status.HTTP_200_OK,
+        )
+
 
 class NotificationUnreadListViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = NotificationUnreadSerializer

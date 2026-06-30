@@ -79,6 +79,7 @@ class SalesHistoryListSerializer(serializers.ModelSerializer):
             "created_time",
             "payment_method",
             "phone_number",
+            "whatsapp_status",
         ]
 
     def get_customer_name(self, obj):
@@ -152,6 +153,7 @@ class SalesHistoryDetailSerializer(serializers.ModelSerializer):
             "phone_number",
             "created_time",
             "payment_method",
+            "whatsapp_status",
             "subtotal",
             "discount_rs",
             "total_amount",

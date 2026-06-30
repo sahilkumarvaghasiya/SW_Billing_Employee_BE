@@ -75,6 +75,7 @@ class BillAdmin(TenantSchemaAdminMixin, admin.ModelAdmin):
         "customer",
         "payment_method",
         "payment_status",
+        "whatsapp_status",
         "total_amount",
         "paid_amount",
         "is_active",
@@ -89,6 +90,7 @@ class BillAdmin(TenantSchemaAdminMixin, admin.ModelAdmin):
     list_filter = (
         "payment_method",
         "payment_status",
+        "whatsapp_status",
         "is_active",
     )
     ordering = ("-created_at",)

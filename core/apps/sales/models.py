@@ -66,6 +66,11 @@ class Bill(models.Model):
         PAID = "paid", "Paid"
         FAILED = "failed", "Failed"
 
+    class WhatsAppStatus(models.TextChoices):
+        PENDING = "pending", "Pending"
+        SENT = "sent", "Sent"
+        FAILED = "failed", "Failed"
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     created_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name="created_bills")
     customer = models.ForeignKey(
@@ -83,6 +88,11 @@ class Bill(models.Model):
     paid_amount = models.DecimalField(max_digits=10, decimal_places=2)
     payment_method = models.CharField(max_length=10, choices=PaymentMethod.choices)
     payment_status = models.CharField(max_length=10, choices=PaymentStatus.choices)
+    whatsapp_status = models.CharField(
+        max_length=10,
+        choices=WhatsAppStatus.choices,
+        default=WhatsAppStatus.PENDING,
+    )
     selected_payment_config = models.ForeignKey(
         PaymentConfig,
         on_delete=models.SET_NULL,
@@ -104,6 +114,7 @@ class Bill(models.Model):
         indexes = [
             models.Index(fields=["created_by"]),
             models.Index(fields=["payment_status"]),
+            models.Index(fields=["whatsapp_status"]),
             models.Index(fields=["created_at"]),
         ]
 

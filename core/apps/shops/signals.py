@@ -6,9 +6,9 @@ from apps.shops.models import Domain, Shop
 
 
 def build_tenant_domain(schema_name):
-    """Domain hostnames must not contain underscores (RFC 1034/1035)."""
+    """Domain hostnames must not contain underscores or spaces (RFC 1034/1035)."""
     suffix = getattr(settings, "TENANT_DOMAIN_SUFFIX", "localhost").strip(".")
-    host_prefix = schema_name.replace("_", "-")
+    host_prefix = schema_name.replace("_", "-").replace(" ", "-")
     return f"{host_prefix}.{suffix}"
 
 

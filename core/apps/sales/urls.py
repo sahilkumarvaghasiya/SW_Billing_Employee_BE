@@ -8,6 +8,7 @@ from apps.sales.views import (
     PaymentConfigQRListViewSet,
     SalesHistoryDetailViewSet,
     SalesHistoryListViewSet,
+    SendWhatsAppInvoiceView,
     TodaySummaryViewSet,
 )
 
@@ -17,6 +18,7 @@ urlpatterns = [
     path("customer-lookup/<str:phone>/", CustomerLookupByPhoneViewSet.as_view({"get": "list"})),
     path("payment-configs/qr/", PaymentConfigQRListViewSet.as_view({"get": "list"})),
     path("bills/create/", BillCreateViewSet.as_view({"post": "create"})),
+    path("bills/send-whatsapp-invoice/", SendWhatsAppInvoiceView.as_view()),
     path("today-summary/", TodaySummaryViewSet.as_view({"get": "list"})),
     path("historylist/", SalesHistoryListViewSet.as_view({"get": "list"})),
     path("saleshistory/details/<uuid:pk>/", SalesHistoryDetailViewSet.as_view({"get": "retrieve"})),
