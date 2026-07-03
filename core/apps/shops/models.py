@@ -39,7 +39,9 @@ class Shop(TenantMixin):
                 candidate = f"{base}{suffix}"
             self.schema_name = candidate
         else:
-            self.schema_name = self.schema_name.lower().replace("-", "_")
+            self.schema_name = (
+                self.schema_name.lower().replace("-", "_").replace(" ", "_")
+            )
         super().save(*args, **kwargs)
 
 

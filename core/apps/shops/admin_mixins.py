@@ -1,4 +1,5 @@
 from django.contrib import admin
+from django.db import connection
 from django_tenants.utils import get_public_schema_name
 
 
@@ -31,12 +32,34 @@ class TenantSchemaAdminMixin:
 class PublicSchemaAdminMixin:
     """Only allow admin access on the public schema (Shop, Domain, User)."""
 
+    def _ensure_public_schema(self):
+        connection.set_schema_to_public()
+
     def _is_public_schema(self, request):
         tenant = getattr(request, "tenant", None)
         if tenant is not None:
             return tenant.schema_name == get_public_schema_name()
-        from django.db import connection
+
+        # localhost with no matching domain leaves schema unset — still public admin
+        if not connection.schema_name:
+            return True
         return connection.schema_name == get_public_schema_name()
+
+    def save_model(self, request, obj, form, change):
+        self._ensure_public_schema()
+        super().save_model(request, obj, form, change)
+
+    def save_formset(self, request, form, formset, change):
+        self._ensure_public_schema()
+        super().save_formset(request, form, formset, change)
+
+    def delete_model(self, request, obj):
+        self._ensure_public_schema()
+        super().delete_model(request, obj)
+
+    def delete_queryset(self, request, queryset):
+        self._ensure_public_schema()
+        super().delete_queryset(request, queryset)
 
     def has_module_permission(self, request):
         return self._is_public_schema(request) and super().has_module_permission(request)

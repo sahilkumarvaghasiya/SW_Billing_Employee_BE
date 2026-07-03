@@ -1,10 +1,10 @@
 from django.contrib import admin
 from django.utils.text import capfirst
-from django_tenants.admin import TenantAdminMixin
 
 from apps.accounts.models import User
 from apps.shops.admin_mixins import PublicSchemaAdminMixin
 from apps.shops.models import Domain, Shop
+from apps.shops.shop_delete import delete_shop
 
 
 class DomainInline(admin.TabularInline):
@@ -13,11 +13,19 @@ class DomainInline(admin.TabularInline):
 
 
 @admin.register(Shop)
-class ShopAdmin(PublicSchemaAdminMixin, TenantAdminMixin, admin.ModelAdmin):
+class ShopAdmin(PublicSchemaAdminMixin, admin.ModelAdmin):
     list_display = ("id", "name", "schema_name", "employee_limit")
     search_fields = ("name", "schema_name")
     list_filter = ("employee_limit",)
     inlines = [DomainInline]
+
+    def changeform_view(self, request, object_id=None, form_url="", extra_context=None):
+        self._ensure_public_schema()
+        return super().changeform_view(request, object_id, form_url, extra_context)
+
+    def add_view(self, request, form_url="", extra_context=None):
+        self._ensure_public_schema()
+        return super().add_view(request, form_url, extra_context)
 
     def get_deleted_objects(self, objs, request):
         """Only list public-schema objects; skip tenant tables like billing_bills."""
@@ -53,28 +61,16 @@ class ShopAdmin(PublicSchemaAdminMixin, TenantAdminMixin, admin.ModelAdmin):
         return to_delete, model_count, set(), []
 
     def delete_model(self, request, obj):
+        self._ensure_public_schema()
         self._delete_shop(obj)
 
     def delete_queryset(self, request, queryset):
+        self._ensure_public_schema()
         for obj in queryset:
             self._delete_shop(obj)
 
     def _delete_shop(self, shop):
-        shop_pk = shop.pk
-
-        try:
-            shop._drop_schema(force_drop=True)
-        except Exception:
-            pass
-
-        user_qs = User.objects.filter(shop_id=shop_pk)
-        user_qs._raw_delete(user_qs.db)
-
-        domain_qs = Domain.objects.filter(tenant_id=shop_pk)
-        domain_qs._raw_delete(domain_qs.db)
-
-        shop_qs = Shop.objects.filter(pk=shop_pk)
-        shop_qs._raw_delete(shop_qs.db)
+        delete_shop(shop)
 
 
 @admin.register(Domain)
