@@ -9,236 +9,247 @@
         body {
             font-family: Helvetica, Arial, sans-serif;
             font-size: 11px;
-            color: #111;
+            color: #1a1a1a;
             background: #fff;
-            line-height: 1.45;
+            line-height: 1.5;
         }
 
-        @page { margin: 14mm 12mm; }
+        @page { margin: 16mm 14mm; }
 
         table { width: 100%; border-collapse: collapse; }
 
-        .invoice-box {
-            border: 1.5px solid #111;
-            padding: 14px 16px;
-        }
+        .wrap { padding: 4px 2px; }
 
+        /* ---- Header ---- */
         .shop-name {
-            font-size: 20px;
+            font-size: 22px;
             font-weight: bold;
             text-align: center;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
+            letter-spacing: 0.6px;
             color: #000;
         }
 
         .shop-meta {
             text-align: center;
             font-size: 10.5px;
-            color: #333;
-            margin-top: 4px;
-            line-height: 1.55;
+            color: #555;
+            margin-top: 5px;
+            line-height: 1.6;
         }
 
-        .rule {
-            border-top: 1px solid #111;
-            margin: 10px 0;
+        .accent {
+            height: 3px;
+            background: #1a1a1a;
+            margin: 14px 0 16px 0;
         }
 
-        .rule-double {
-            border-top: 2px solid #111;
-            margin: 8px 0 10px 0;
+        /* ---- Meta blocks ---- */
+        .info-panel {
+            background: #f6f6f6;
+            padding: 12px 14px;
+            margin-bottom: 18px;
         }
 
-        .title-row td {
-            padding: 6px 0 8px 0;
+        .info-panel td {
             vertical-align: top;
+            padding: 0;
         }
 
         .doc-title {
-            font-size: 13px;
+            font-size: 12px;
             font-weight: bold;
             text-transform: uppercase;
-            letter-spacing: 1px;
+            letter-spacing: 1.2px;
+            color: #333;
         }
 
         .meta-label {
-            font-size: 9.5px;
-            color: #555;
+            font-size: 9px;
+            color: #888;
             text-transform: uppercase;
-            letter-spacing: 0.4px;
+            letter-spacing: 0.5px;
+            margin-bottom: 2px;
         }
 
         .meta-value {
             font-size: 11px;
             font-weight: bold;
-            color: #000;
-            margin-top: 1px;
+            color: #111;
         }
 
         .meta-line {
-            font-size: 10.5px;
+            font-size: 10px;
+            color: #555;
             margin-top: 2px;
         }
 
         .right { text-align: right; }
 
+        .status-paid { color: #1a7a1a; font-weight: bold; }
+        .status-failed { color: #c0392b; font-weight: bold; }
+
+        /* ---- Items (borderless body, clean header) ---- */
+        .items { margin-bottom: 6px; }
+
+        .items thead tr {
+            background: #1a1a1a;
+        }
+
         .items th {
-            border: 1px solid #111;
-            background: #f2f2f2;
-            font-size: 9.5px;
+            color: #fff;
+            font-size: 9px;
             font-weight: bold;
             text-transform: uppercase;
-            padding: 7px 6px;
+            letter-spacing: 0.6px;
+            padding: 9px 8px;
             text-align: left;
+            border: none;
         }
 
-        .items th.r,
-        .items td.r {
-            text-align: right;
-        }
+        .items th.r, .items td.r { text-align: right; }
+        .items th.c, .items td.c { text-align: center; }
 
-        .items th.c {
-            text-align: center;
-        }
-
-        .items td {
-            border: 1px solid #ccc;
-            padding: 7px 6px;
+        .items tbody td {
+            padding: 10px 8px;
             font-size: 10.5px;
             vertical-align: top;
+            border: none;
+            border-bottom: 1px solid #ececec;
+        }
+
+        .items tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        .items tbody tr.alt td {
+            background: #fafafa;
         }
 
         .items td.sr {
-            text-align: center;
-            color: #555;
-            width: 26px;
+            color: #999;
+            font-size: 10px;
+            width: 24px;
         }
 
         .item-name {
             font-weight: bold;
-            color: #000;
+            color: #111;
         }
 
         .item-sub {
             font-size: 9.5px;
-            color: #666;
+            color: #777;
             margin-top: 2px;
         }
 
+        .item-amt {
+            font-weight: bold;
+            color: #111;
+        }
+
+        /* ---- Totals ---- */
+        .totals-wrap {
+            margin-top: 4px;
+        }
+
+        .totals-box {
+            background: #f6f6f6;
+            padding: 12px 14px;
+        }
+
         .totals td {
-            padding: 4px 0;
+            padding: 3px 0;
             font-size: 10.5px;
+            border: none;
         }
 
         .totals .label {
             text-align: right;
-            padding-right: 12px;
-            color: #333;
+            padding-right: 16px;
+            color: #555;
         }
 
         .totals .value {
             text-align: right;
-            width: 110px;
-            font-weight: bold;
+            width: 100px;
+            color: #111;
         }
 
-        .totals .discount .value {
-            color: #b00020;
-        }
+        .totals .discount .value { color: #c0392b; }
 
-        .grand-total td {
-            border-top: 1.5px solid #111;
-            border-bottom: 1.5px solid #111;
-            padding: 8px 0;
-            margin-top: 4px;
+        .grand-row td {
+            padding-top: 10px !important;
+            border-top: 2px solid #1a1a1a !important;
+            margin-top: 6px;
             font-size: 12px;
             font-weight: bold;
+            color: #000;
         }
 
+        .grand-row .value {
+            font-size: 13px;
+        }
+
+        /* ---- Footer ---- */
         .footer {
-            margin-top: 14px;
-            border-top: 1px dashed #999;
-            padding-top: 10px;
+            margin-top: 22px;
             text-align: center;
+            padding-top: 14px;
+            border-top: 1px solid #e8e8e8;
         }
 
         .thanks {
-            font-size: 11.5px;
+            font-size: 11px;
             font-weight: bold;
-            text-transform: uppercase;
-            letter-spacing: 0.3px;
+            color: #111;
+            letter-spacing: 0.4px;
         }
 
         .foot-note {
-            font-size: 9.5px;
-            color: #666;
+            font-size: 9px;
+            color: #999;
             margin-top: 4px;
         }
 
-        .status-paid {
-            color: #0a7a0a;
-            font-weight: bold;
-            text-transform: uppercase;
-        }
-
-        .status-failed {
-            color: #b00020;
-            font-weight: bold;
-            text-transform: uppercase;
+        .remarks {
+            font-size: 10px;
+            color: #666;
+            margin-top: 12px;
+            padding: 0 4px;
         }
     </style>
 </head>
 <body>
 
-<div class="invoice-box">
+<div class="wrap">
 
-    <!-- Shop header -->
+    <!-- Shop -->
     <div class="shop-name">{{ shop.name|default:"Retail Shop" }}</div>
     <div class="shop-meta">
         {% if shop.address %}{{ shop.address }}<br />{% endif %}
         {% if shop.mobile_number %}Ph: {{ shop.mobile_number }}{% endif %}
-        {% if shop.gst_number %}{% if shop.mobile_number %} &nbsp;|&nbsp; {% endif %}GSTIN: {{ shop.gst_number }}{% endif %}
+        {% if shop.gst_number %}{% if shop.mobile_number %} &nbsp;&middot;&nbsp; {% endif %}GSTIN: {{ shop.gst_number }}{% endif %}
     </div>
 
-    <div class="rule-double"></div>
+    <div class="accent"></div>
 
-    <!-- Invoice title + bill meta -->
-    <table cellpadding="0" cellspacing="0" class="title-row">
+    <!-- Bill + customer info (single soft panel, no grid) -->
+    <table class="info-panel" cellpadding="0" cellspacing="0">
         <tr>
-            <td style="width: 50%;">
+            <td style="width: 34%;">
                 <div class="doc-title">Tax Invoice</div>
             </td>
-            <td class="right" style="width: 50%;">
+            <td class="right" style="width: 33%;">
                 <div class="meta-label">Bill No.</div>
                 <div class="meta-value">{{ bill.bill_number }}</div>
-                <div class="meta-line">{{ bill.created_at|date:"d-m-Y" }} &nbsp; {{ bill.created_at|date:"h:i A" }}</div>
+                <div class="meta-line">{{ bill.created_at|date:"d M Y, h:i A" }}</div>
             </td>
-        </tr>
-    </table>
-
-    <div class="rule"></div>
-
-    <!-- Customer details -->
-    <table cellpadding="0" cellspacing="0">
-        <tr>
-            <td style="width: 55%; vertical-align: top;">
-                <div class="meta-label">Customer</div>
-                <div class="meta-value">{{ bill.customer.name|default:"Walk-in Customer" }}</div>
-                {% if bill.customer.phone %}
-                <div class="meta-line">Mob: {{ bill.customer.phone }}</div>
-                {% endif %}
-                {% if bill.customer.address %}
-                <div class="meta-line">{{ bill.customer.address }}</div>
-                {% endif %}
-            </td>
-            <td class="right" style="width: 45%; vertical-align: top;">
+            <td class="right" style="width: 33%;">
                 <div class="meta-label">Payment</div>
                 <div class="meta-value">
                     {% if bill.payment_method == "qr" %}UPI / QR{% else %}{{ bill.payment_method|title }}{% endif %}
-                </div>
-                <div class="meta-line">
-                    Status:
+                    &nbsp;&middot;&nbsp;
                     {% if bill.payment_status == "paid" %}
                         <span class="status-paid">Paid</span>
                     {% else %}
@@ -247,87 +258,92 @@
                 </div>
             </td>
         </tr>
+        <tr>
+            <td colspan="3" style="padding-top: 10px;">
+                <div class="meta-label">Billed To</div>
+                <div class="meta-value">{{ bill.customer.name|default:"Walk-in Customer" }}</div>
+                {% if bill.customer.phone or bill.customer.address %}
+                <div class="meta-line">
+                    {% if bill.customer.phone %}{{ bill.customer.phone }}{% endif %}
+                    {% if bill.customer.phone and bill.customer.address %} &nbsp;&middot;&nbsp; {% endif %}
+                    {% if bill.customer.address %}{{ bill.customer.address }}{% endif %}
+                </div>
+                {% endif %}
+            </td>
+        </tr>
     </table>
 
-    <div class="rule" style="margin-top: 12px;"></div>
-
-    <!-- Line items -->
-    <table class="items" cellpadding="0" cellspacing="0" style="margin-top: 8px;">
+    <!-- Items: dark header bar only, light row separators -->
+    <table class="items" cellpadding="0" cellspacing="0">
         <thead>
             <tr>
-                <th class="c" style="width: 28px;">Sr.</th>
-                <th>Particulars</th>
-                <th class="c" style="width: 36px;">Qty</th>
-                <th class="r" style="width: 72px;">Rate (Rs.)</th>
-                <th class="r" style="width: 80px;">Amount (Rs.)</th>
+                <th class="c" style="width: 24px;">#</th>
+                <th>Item</th>
+                <th class="c" style="width: 32px;">Qty</th>
+                <th class="r" style="width: 68px;">Rate</th>
+                <th class="r" style="width: 76px;">Amount</th>
             </tr>
         </thead>
         <tbody>
             {% for item in items %}
-            <tr>
-                <td class="sr">{{ forloop.counter }}</td>
+            <tr {% if forloop.counter|divisibleby:2 %}class="alt"{% endif %}>
+                <td class="sr c">{{ forloop.counter }}</td>
                 <td>
                     <div class="item-name">{{ item.product_variant.product.item_type.name|default:"Item" }}</div>
                     {% if item.product_variant.size or item.product_variant.color or item.product_variant.product.company %}
                     <div class="item-sub">
                         {% if item.product_variant.product.company %}{{ item.product_variant.product.company.name|title }}{% endif %}
-                        {% if item.product_variant.size %}{% if item.product_variant.product.company %} &bull; {% endif %}Size: {{ item.product_variant.size.name|upper }}{% endif %}
-                        {% if item.product_variant.color %}{% if item.product_variant.product.company or item.product_variant.size %} &bull; {% endif %}{{ item.product_variant.color.name|title }}{% endif %}
+                        {% if item.product_variant.size %}{% if item.product_variant.product.company %} &middot; {% endif %}{{ item.product_variant.size.name|upper }}{% endif %}
+                        {% if item.product_variant.color %}{% if item.product_variant.product.company or item.product_variant.size %} &middot; {% endif %}{{ item.product_variant.color.name|title }}{% endif %}
                     </div>
-                    {% endif %}
-                    {% if item.custom_amount and item.custom_amount != "0.00" %}
-                    <div class="item-sub">Discount: Rs. {{ item.custom_amount|indian_amount }}</div>
                     {% endif %}
                 </td>
                 <td class="c">{{ item.quantity }}</td>
                 <td class="r">{{ item.price|indian_amount }}</td>
-                <td class="r">{{ item.total_price|indian_amount }}</td>
+                <td class="r item-amt">{{ item.total_price|indian_amount }}</td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
 
     <!-- Totals -->
-    <table cellpadding="0" cellspacing="0" style="margin-top: 10px;">
+    <table cellpadding="0" cellspacing="0" class="totals-wrap">
         <tr>
-            <td style="width: 55%; vertical-align: top;">
+            <td style="width: 52%; vertical-align: top;">
                 {% if bill.notes %}
-                <div class="meta-label">Remarks</div>
-                <div class="meta-line" style="margin-top: 3px;">{{ bill.notes }}</div>
+                <div class="remarks">
+                    <span class="meta-label">Note &nbsp;</span>{{ bill.notes }}
+                </div>
                 {% endif %}
             </td>
-            <td style="width: 45%; vertical-align: top;">
-                <table class="totals" cellpadding="0" cellspacing="0">
-                    <tr>
-                        <td class="label">Sub Total</td>
-                        <td class="value">Rs. {{ bill.subtotal|indian_amount }}</td>
-                    </tr>
-                    {% if bill.custom_amount and bill.custom_amount != "0.00" %}
-                    <tr class="discount">
-                        <td class="label">
-                            Discount{% if bill.discount_percent and bill.discount_percent != "0.00" %} ({{ bill.discount_percent }}%){% endif %}
-                        </td>
-                        <td class="value">Rs. {{ bill.custom_amount|indian_amount }}</td>
-                    </tr>
-                    {% endif %}
-                    <tr class="grand-total">
-                        <td class="label">Grand Total</td>
-                        <td class="value">Rs. {{ bill.total_amount|indian_amount }}</td>
-                    </tr>
-                    {% if bill.paid_amount and bill.paid_amount != bill.total_amount %}
-                    <tr>
-                        <td class="label">Amount Paid</td>
-                        <td class="value">Rs. {{ bill.paid_amount|indian_amount }}</td>
-                    </tr>
-                    {% endif %}
-                </table>
+            <td style="width: 48%; vertical-align: top;">
+                <div class="totals-box">
+                    <table class="totals" cellpadding="0" cellspacing="0">
+                        <tr>
+                            <td class="label">Subtotal</td>
+                            <td class="value">Rs. {{ bill.subtotal|indian_amount }}</td>
+                        </tr>
+                        {% if bill.custom_amount and bill.custom_amount != "0.00" %}
+                        <tr class="discount">
+                            <td class="label">
+                                Discount{% if bill.discount_percent and bill.discount_percent != "0.00" %} ({{ bill.discount_percent }}%){% endif %}
+                            </td>
+                            <td class="value">- Rs. {{ bill.custom_amount|indian_amount }}</td>
+                        </tr>
+                        {% endif %}
+                        <tr class="grand-row">
+                            <td class="label">Grand Total</td>
+                            <td class="value">Rs. {{ bill.total_amount|indian_amount }}</td>
+                        </tr>
+                    </table>
+                </div>
             </td>
         </tr>
     </table>
 
     <div class="footer">
-        <div class="thanks">Thank you! Visit again.</div>
-        <div class="foot-note">This is a computer-generated invoice and does not require a signature.</div>
+        <div class="thanks">Thank you for shopping with us!</div>
+        <div class="foot-note">Computer-generated invoice &mdash; no signature required</div>
     </div>
 
 </div>
