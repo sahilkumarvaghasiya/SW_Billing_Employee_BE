@@ -85,6 +85,13 @@
         margin-top: 2px;
     }
 
+    .shop-gst {
+        font-size: 8.5px;
+        color: #333333;
+        margin-top: 4px;
+        font-weight: bold;
+    }
+
     /* ───────── META ROW ───────── */
     .meta-row {
         border-top: 1px solid #4b2c11;
@@ -352,6 +359,9 @@
             {% if shop.mobile_number %}
             <div class="shop-contact">Ph: {{ shop.mobile_number }}</div>
             {% endif %}
+            {% if shop.gst_number %}
+            <div class="shop-gst">GSTIN: {{ shop.gst_number }}</div>
+            {% endif %}
         </div>
 
         <!-- ════ CLIENT & INVOICE META ════ -->
@@ -446,8 +456,7 @@
                         <div class="contact">&#9742; {{ shop.mobile_number }}</div>
                         {% endif %}
                         <div class="legal">
-                            Terms &amp; Conditions Apply<br/>
-                            {% if shop.gst_number %}GSTIN : {{ shop.gst_number }}{% endif %}
+                            Terms &amp; Conditions Apply
                         </div>
                         {% if bill.notes %}
                         <div class="note-block">
