@@ -147,6 +147,7 @@ class Command(BaseCommand):
                 bill=bill,
                 product_variant=variant,
                 quantity=quantity,
+                original_price=price,
                 price=price,
                 discount_percent=Decimal("0.00"),
                 custom_amount=Decimal("0.00"),
