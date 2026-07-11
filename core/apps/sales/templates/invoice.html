@@ -4,163 +4,163 @@
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
 <style>
-    * { margin: 0; padding: 0; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
 
     body {
         font-family: Helvetica, Arial, sans-serif;
         font-size: 11px;
-        color: #2b3440;
+        color: #1f2937;
         background: #ffffff;
-        line-height: 1.5;
+        line-height: 1.55;
     }
 
-    @page { margin: 14mm 13mm; }
+    @page { margin: 15mm 14mm; }
 
     table { width: 100%; border-collapse: collapse; }
 
     /* ───────── HEADER ───────── */
-    .header-band {
-        background: #14304e;
-        padding: 16px 18px;
+    .header {
+        border-bottom: 2px solid #111827;
+        padding-bottom: 14px;
     }
+    .header td { vertical-align: top; }
     .shop-name {
-        font-size: 21px;
+        font-size: 22px;
         font-weight: bold;
-        color: #ffffff;
-        letter-spacing: 1px;
-        text-transform: uppercase;
+        color: #111827;
+        letter-spacing: 0.5px;
     }
     .shop-tag {
         font-size: 9.5px;
-        color: #b9c7d6;
-        margin-top: 3px;
-        letter-spacing: 0.3px;
+        color: #6b7280;
+        margin-top: 4px;
     }
-    .header-right {
-        text-align: right;
-        vertical-align: top;
-    }
+    .header-right { text-align: right; }
     .inv-word {
-        font-size: 16px;
+        font-size: 20px;
         font-weight: bold;
-        color: #ffffff;
-        letter-spacing: 3px;
+        color: #4f46e5;
+        letter-spacing: 4px;
+        text-transform: uppercase;
     }
     .inv-gst {
         font-size: 9.5px;
-        color: #d5e0ea;
-        margin-top: 4px;
+        color: #6b7280;
+        margin-top: 5px;
     }
 
     /* ───────── META STRIP ───────── */
-    .meta {
-        margin-top: 16px;
-    }
+    .meta { margin-top: 18px; }
     .meta td {
         vertical-align: top;
         padding: 0 8px 0 0;
     }
     .meta-block {
-        background: #f4f7fa;
-        border-left: 3px solid #14304e;
-        padding: 8px 11px;
+        background: #f9fafb;
+        border: 1px solid #eceef1;
+        border-radius: 6px;
+        padding: 10px 12px;
     }
     .k {
         font-size: 8px;
-        color: #90a0b0;
+        color: #9ca3af;
         text-transform: uppercase;
-        letter-spacing: 0.6px;
-        margin-bottom: 2px;
+        letter-spacing: 0.8px;
+        margin-bottom: 3px;
     }
-    .v { font-size: 10.5px; font-weight: bold; color: #1f2b38; }
-    .v-sub { font-size: 9.5px; color: #61707e; margin-top: 1px; }
+    .v { font-size: 10.5px; font-weight: bold; color: #111827; }
+    .v-sub { font-size: 9.5px; color: #6b7280; margin-top: 2px; }
 
-    .paid   { color: #15803d; font-weight: bold; }
-    .unpaid { color: #c0392b; font-weight: bold; }
+    .paid   { color: #059669; font-weight: bold; }
+    .unpaid { color: #dc2626; font-weight: bold; }
 
     /* ───────── ITEMS ───────── */
-    .items { margin-top: 18px; }
+    .items { margin-top: 20px; }
 
-    .items thead tr { background: #14304e; }
+    .items thead tr { background: #111827; }
     .items th {
         color: #ffffff;
         font-size: 8.5px;
         font-weight: bold;
         text-transform: uppercase;
-        letter-spacing: 0.5px;
-        padding: 9px 8px;
+        letter-spacing: 0.6px;
+        padding: 10px 9px;
         text-align: left;
     }
+    .items th:first-child { border-radius: 5px 0 0 0; }
+    .items th:last-child { border-radius: 0 5px 0 0; }
     .items th.r, .items td.r { text-align: right; }
     .items th.c, .items td.c { text-align: center; }
 
     .items tbody td {
-        padding: 9px 8px;
+        padding: 9px;
         font-size: 10px;
         vertical-align: top;
-        border-bottom: 1px solid #e7edf2;
+        border-bottom: 1px solid #eef0f2;
     }
-    .items tbody tr.alt td { background: #f7f9fb; }
+    .items tbody tr.alt td { background: #fafbfc; }
 
-    .sr { color: #a9b6c2; font-size: 9.5px; }
-    .nm { font-weight: bold; color: #1f2b38; font-size: 10.5px; }
-    .nm-sub { font-size: 9px; color: #8b99a6; margin-top: 1px; }
-    .amt { font-weight: bold; color: #1f2b38; }
-    .disc { color: #c0392b; }
+    .sr { color: #b6bdc6; font-size: 9.5px; }
+    .nm { font-weight: bold; color: #111827; font-size: 10.5px; }
+    .nm-sub { font-size: 9px; color: #9ca3af; margin-top: 2px; }
+    .amt { font-weight: bold; color: #111827; }
+    .disc { color: #dc2626; }
 
     /* ───────── TOTALS ───────── */
-    .foot { margin-top: 14px; }
+    .foot { margin-top: 16px; }
     .foot td { vertical-align: top; }
 
     .note {
         font-size: 9.5px;
-        color: #61707e;
-        padding: 4px 2px;
+        color: #6b7280;
+        padding: 6px 2px;
     }
     .note .k { display: inline; }
 
     .totbox {
-        background: #f4f7fa;
-        padding: 11px 14px;
+        background: #f9fafb;
+        border: 1px solid #eceef1;
+        border-radius: 6px;
+        padding: 12px 15px;
     }
-    .tot td { padding: 3.5px 0; font-size: 10.5px; }
-    .tot .tl { text-align: right; padding-right: 16px; color: #61707e; }
-    .tot .tv { text-align: right; width: 95px; color: #1f2b38; font-weight: bold; }
-    .tot .dl .tv { color: #c0392b; }
+    .tot td { padding: 4px 0; font-size: 10.5px; white-space: nowrap; }
+    .tot .tl { text-align: right; padding-right: 16px; color: #6b7280; }
+    .tot .tv { text-align: right; width: 110px; color: #111827; font-weight: bold; white-space: nowrap; }
+    .tot .dl .tv { color: #dc2626; }
 
     .tot .itemtot td {
-        border-top: 1px solid #d4dde5;
-        padding-top: 7px;
+        border-top: 1px solid #e2e6ea;
+        padding-top: 8px;
         font-weight: bold;
     }
-    .tot .itemtot .tl { color: #1f2b38; }
+    .tot .itemtot .tl { color: #111827; }
 
     .tot .grand td {
-        border-top: 2px solid #14304e;
-        padding-top: 8px;
+        border-top: 2px solid #4f46e5;
+        padding-top: 9px;
         font-size: 13px;
         font-weight: bold;
-        color: #14304e;
+        color: #4f46e5;
     }
-    .tot .grand .tv { font-size: 14px; color: #14304e; }
+    .tot .grand .tv { font-size: 15px; color: #4f46e5; }
 
     /* ───────── FOOTER ───────── */
     .thanks {
-        margin-top: 22px;
-        background: #f4f7fa;
-        padding: 12px;
+        margin-top: 24px;
+        border-top: 1px dashed #d1d5db;
+        padding-top: 14px;
         text-align: center;
     }
-    .thanks-main { font-size: 11px; font-weight: bold; color: #14304e; letter-spacing: 0.3px; }
-    .thanks-sub  { font-size: 8.5px; color: #9aa7b3; margin-top: 3px; }
+    .thanks-main { font-size: 11px; font-weight: bold; color: #111827; letter-spacing: 0.3px; }
+    .thanks-sub  { font-size: 8.5px; color: #9ca3af; margin-top: 4px; }
 </style>
 </head>
 <body>
 
     <!-- ════ HEADER ════ -->
-    <table class="header-band" cellpadding="0" cellspacing="0">
+    <table class="header" cellpadding="0" cellspacing="0">
         <tr>
-            <td style="vertical-align: top;">
+            <td>
                 <div class="shop-name">{{ shop.name|default:"Retail Shop" }}</div>
                 <div class="shop-tag">
                     {% if shop.address %}{{ shop.address }}{% endif %}
@@ -168,7 +168,7 @@
                 </div>
             </td>
             <td class="header-right">
-                <div class="inv-word">INVOICE</div>
+                <div class="inv-word">Invoice</div>
                 {% if shop.gst_number %}
                 <div class="inv-gst">GSTIN: {{ shop.gst_number }}</div>
                 {% endif %}
