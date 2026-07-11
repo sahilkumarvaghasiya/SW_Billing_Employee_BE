@@ -40,6 +40,7 @@ class BillItemInline(admin.TabularInline):
     fields = (
         "product_variant",
         "quantity",
+        "original_price",
         "price",
         "discount_percent",
         "custom_amount",

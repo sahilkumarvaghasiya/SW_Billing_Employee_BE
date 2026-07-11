@@ -92,7 +92,7 @@ class Bill(models.Model):
         max_length=10,
         choices=WhatsAppStatus.choices,
         default=WhatsAppStatus.PENDING,
-    )
+    ) 
     selected_payment_config = models.ForeignKey(
         PaymentConfig,
         on_delete=models.SET_NULL,
@@ -157,6 +157,7 @@ class BillItem(models.Model):
         related_name="bill_items"
     )
     quantity = models.PositiveIntegerField(validators=[MinValueValidator(1)])
+    original_price = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
     price = models.DecimalField(max_digits=10, decimal_places=2)
     discount_percent = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal("0.00"))
     custom_amount = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
@@ -175,7 +176,10 @@ class BillItem(models.Model):
         return f"{self.product_variant} x {self.quantity}"
 
     def save(self, *args, **kwargs):
+        self.original_price = Bill._to_money(self.original_price)
         self.price = Bill._to_money(self.price)
+        if not self.original_price:
+            self.original_price = self.price
         self.custom_amount = Bill._to_money(self.custom_amount)
         self.total_price = Bill._to_money(self.total_price)
         self.discount_percent = Decimal(str(self.discount_percent or Decimal("0.00"))).quantize(
