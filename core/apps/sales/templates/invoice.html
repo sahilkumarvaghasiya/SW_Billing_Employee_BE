@@ -2,350 +2,498 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-    <style>
-        * { margin: 0; padding: 0; }
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
 
-        body {
-            font-family: Helvetica, Arial, sans-serif;
-            font-size: 11px;
-            color: #1a1a1a;
-            background: #fff;
-            line-height: 1.5;
-        }
+    body {
+        font-family: Helvetica, Arial, sans-serif;
+        font-size: 10px;
+        color: #1a1a1a;
+        background: #ffffff;
+        line-height: 1.45;
+    }
 
-        @page { margin: 16mm 14mm; }
+    @page { margin: 10mm 10mm; }
 
-        table { width: 100%; border-collapse: collapse; }
+    table { width: 100%; border-collapse: collapse; }
 
-        .wrap { padding: 4px 2px; }
+    /* ───────── OUTER FRAME ───────── */
+    .frame {
+        border: 4px solid #4b2c11;
+        padding: 0;
+    }
 
-        /* ---- Header ---- */
-        .shop-name {
-            font-size: 22px;
-            font-weight: bold;
-            text-align: center;
-            text-transform: uppercase;
-            letter-spacing: 0.6px;
-            color: #000;
-        }
+    .frame-top {
+        background: #4b2c11;
+        height: 22px;
+    }
 
-        .shop-meta {
-            text-align: center;
-            font-size: 10.5px;
-            color: #555;
-            margin-top: 5px;
-            line-height: 1.6;
-        }
+    .frame-top td {
+        vertical-align: middle;
+        padding: 0 10px;
+    }
 
-        .accent {
-            height: 3px;
-            background: #1a1a1a;
-            margin: 14px 0 16px 0;
-        }
+    .inv-badge {
+        font-size: 10px;
+        font-weight: bold;
+        color: #ffffff;
+        letter-spacing: 3px;
+        text-transform: uppercase;
+        text-align: right;
+    }
 
-        /* ---- Meta blocks ---- */
-        .info-panel {
-            background: #f6f6f6;
-            padding: 12px 14px;
-            margin-bottom: 18px;
-        }
+    .frame-inner { padding: 14px 16px 12px 16px; }
 
-        .info-panel td {
-            vertical-align: top;
-            padding: 0;
-        }
+    /* ───────── BRAND HEADER ───────── */
+    .brand-wrap { text-align: center; padding: 8px 0 10px 0; }
 
-        .doc-title {
-            font-size: 12px;
-            font-weight: bold;
-            text-transform: uppercase;
-            letter-spacing: 1.2px;
-            color: #333;
-        }
+    .brand-box {
+        background: #4b2c11;
+        border: 2px solid #c9a227;
+        padding: 10px 28px 8px 28px;
+        text-align: center;
+        margin: 0 auto;
+    }
 
-        .meta-label {
-            font-size: 9px;
-            color: #888;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin-bottom: 2px;
-        }
+    .brand-name {
+        font-size: 26px;
+        font-weight: bold;
+        color: #d4af37;
+        letter-spacing: 1px;
+        line-height: 1.1;
+    }
 
-        .meta-value {
-            font-size: 11px;
-            font-weight: bold;
-            color: #111;
-        }
+    .brand-tag {
+        font-size: 7px;
+        color: #e8d5a3;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+        margin-top: 4px;
+    }
 
-        .meta-line {
-            font-size: 10px;
-            color: #555;
-            margin-top: 2px;
-        }
+    .shop-address {
+        font-size: 8.5px;
+        color: #333333;
+        margin-top: 8px;
+        line-height: 1.5;
+    }
 
-        .right { text-align: right; }
+    .shop-contact {
+        font-size: 8px;
+        color: #555555;
+        margin-top: 2px;
+    }
 
-        .status-paid { color: #1a7a1a; font-weight: bold; }
-        .status-failed { color: #c0392b; font-weight: bold; }
+    /* ───────── META ROW ───────── */
+    .meta-row {
+        border-top: 1px solid #4b2c11;
+        border-bottom: 1px solid #4b2c11;
+        margin-top: 12px;
+    }
 
-        /* ---- Items (borderless body, clean header) ---- */
-        .items { margin-bottom: 6px; }
+    .meta-row td {
+        vertical-align: top;
+        padding: 8px 6px;
+    }
 
-        .items thead tr {
-            background: #1a1a1a;
-        }
+    .to-label {
+        font-size: 9px;
+        color: #333333;
+        margin-bottom: 2px;
+    }
 
-        .items th {
-            color: #fff;
-            font-size: 9px;
-            font-weight: bold;
-            text-transform: uppercase;
-            letter-spacing: 0.6px;
-            padding: 9px 8px;
-            text-align: left;
-            border: none;
-        }
+    .to-name {
+        font-size: 11px;
+        font-weight: bold;
+        color: #1a1a1a;
+    }
 
-        .items th.r, .items td.r { text-align: right; }
-        .items th.c, .items td.c { text-align: center; }
+    .to-sub {
+        font-size: 8.5px;
+        color: #555555;
+        margin-top: 2px;
+        line-height: 1.4;
+    }
 
-        .items tbody td {
-            padding: 10px 8px;
-            font-size: 10.5px;
-            vertical-align: top;
-            border: none;
-            border-bottom: 1px solid #ececec;
-        }
+    .meta-right { text-align: right; }
 
-        .items tbody tr:last-child td {
-            border-bottom: none;
-        }
+    .meta-line {
+        font-size: 9.5px;
+        color: #1a1a1a;
+        line-height: 1.7;
+        white-space: nowrap;
+    }
 
-        .items tbody tr.alt td {
-            background: #fafafa;
-        }
+    .meta-line .lbl {
+        display: inline-block;
+        min-width: 72px;
+        text-align: left;
+    }
 
-        .items td.sr {
-            color: #999;
-            font-size: 10px;
-            width: 24px;
-        }
+    .meta-line .val {
+        font-weight: bold;
+        min-width: 90px;
+        display: inline-block;
+        text-align: right;
+    }
 
-        .item-name {
-            font-weight: bold;
-            color: #111;
-        }
+    .paid   { color: #1b5e20; font-weight: bold; }
+    .unpaid { color: #b71c1c; font-weight: bold; }
 
-        .item-sub {
-            font-size: 9.5px;
-            color: #777;
-            margin-top: 2px;
-        }
+    /* ───────── ITEMS TABLE ───────── */
+    .items { margin-top: 0; table-layout: fixed; width: 100%; }
 
-        .item-amt {
-            font-weight: bold;
-            color: #111;
-        }
+    .items thead tr { background: #4b2c11; }
 
-        /* ---- Totals ---- */
-        .totals-wrap {
-            margin-top: 4px;
-        }
+    .items th {
+        color: #ffffff;
+        font-size: 9px;
+        font-weight: bold;
+        padding: 7px 4px;
+        border-right: 1px solid #6b4423;
+        text-align: center;
+        white-space: nowrap;
+    }
 
-        .totals-box {
-            background: #f6f6f6;
-            padding: 12px 14px;
-        }
+    .items th:last-child { border-right: none; }
+    .items th.desc { text-align: left; white-space: normal; }
 
-        .totals td {
-            padding: 3px 0;
-            font-size: 10.5px;
-            border: none;
-        }
+    .items tbody td {
+        padding: 7px 4px;
+        font-size: 9.5px;
+        vertical-align: top;
+        border-right: 1px solid #cccccc;
+        border-bottom: none;
+    }
 
-        .totals .label {
-            text-align: right;
-            padding-right: 16px;
-            color: #555;
-        }
+    .items tbody td.num {
+        white-space: nowrap;
+        vertical-align: top;
+        text-align: right;
+        overflow: hidden;
+    }
 
-        .totals .value {
-            text-align: right;
-            width: 100px;
-            color: #111;
-        }
+    .items tbody td.qty {
+        white-space: nowrap;
+        vertical-align: top;
+        text-align: center;
+    }
 
-        .totals .discount .value { color: #c0392b; }
+    .items tbody td.sr {
+        white-space: nowrap;
+        vertical-align: top;
+        text-align: center;
+    }
 
-        .grand-row td {
-            padding-top: 10px !important;
-            border-top: 2px solid #1a1a1a !important;
-            margin-top: 6px;
-            font-size: 12px;
-            font-weight: bold;
-            color: #000;
-        }
+    .items tbody td.desc {
+        vertical-align: top;
+        text-align: left;
+        word-wrap: break-word;
+    }
 
-        .grand-row .value {
-            font-size: 13px;
-        }
+    .items tbody td:last-child { border-right: none; }
 
-        /* ---- Footer ---- */
-        .footer {
-            margin-top: 22px;
-            text-align: center;
-            padding-top: 14px;
-            border-top: 1px solid #e8e8e8;
-        }
+    .items tbody tr td {
+        border-top: 1px solid #e8e8e8;
+    }
 
-        .thanks {
-            font-size: 11px;
-            font-weight: bold;
-            color: #111;
-            letter-spacing: 0.4px;
-        }
+    .items .body-spacer td {
+        border-top: none;
+        border-right: 1px solid #cccccc;
+        height: 120px;
+        padding: 0;
+    }
 
-        .foot-note {
-            font-size: 9px;
-            color: #999;
-            margin-top: 4px;
-        }
+    .items .body-spacer td:last-child { border-right: none; }
 
-        .remarks {
-            font-size: 10px;
-            color: #666;
-            margin-top: 12px;
-            padding: 0 4px;
-        }
-    </style>
+    .items .disc { color: #8b0000; }
+
+    .item-name {
+        font-weight: bold;
+        color: #1a1a1a;
+        font-size: 9.5px;
+    }
+
+    .item-sub {
+        font-size: 8px;
+        color: #666666;
+        margin-top: 2px;
+        line-height: 1.35;
+    }
+
+    /* ───────── FOOTER ───────── */
+    .footer {
+        border-top: 1px dashed #888888;
+        margin-top: 0;
+    }
+
+    .footer td {
+        vertical-align: top;
+        padding: 10px 4px 4px 4px;
+    }
+
+    .foot-left {
+        font-size: 8px;
+        color: #333333;
+        line-height: 1.7;
+    }
+
+    .foot-left .contact {
+        font-size: 8.5px;
+        font-weight: bold;
+        margin-bottom: 4px;
+    }
+
+    .foot-left .legal {
+        font-size: 7.5px;
+        color: #555555;
+        margin-top: 6px;
+        line-height: 1.5;
+    }
+
+    .foot-center {
+        text-align: center;
+        font-size: 8.5px;
+        color: #333333;
+    }
+
+    .foot-center .pay-info {
+        margin-bottom: 28px;
+        line-height: 1.6;
+    }
+
+    .foot-center .sign-line {
+        margin-top: 36px;
+        font-size: 9px;
+        color: #1a1a1a;
+    }
+
+    .foot-right { text-align: right; }
+
+    .totals-table { width: 100%; border-collapse: collapse; }
+
+    .totals-table td {
+        padding: 2px 0;
+        font-size: 9.5px;
+        white-space: nowrap;
+    }
+
+    .totals-table .tl {
+        text-align: left;
+        color: #333333;
+        padding-right: 12px;
+    }
+
+    .totals-table .tv {
+        text-align: right;
+        font-weight: bold;
+        color: #1a1a1a;
+        min-width: 80px;
+    }
+
+    .totals-table .sub .tv { font-weight: normal; }
+
+    .totals-table .disc-row .tv { color: #8b0000; }
+
+    .totals-table .grand td {
+        padding-top: 6px;
+        font-size: 12px;
+        font-weight: bold;
+        color: #4b2c11;
+        border-top: 1px solid #4b2c11;
+    }
+
+    .totals-table .grand .tv {
+        font-size: 13px;
+        color: #4b2c11;
+        text-decoration: underline;
+    }
+
+    .note-block {
+        font-size: 8px;
+        color: #555555;
+        margin-top: 8px;
+        line-height: 1.45;
+        max-width: 180px;
+    }
+
+    .note-block .note-label {
+        font-weight: bold;
+        color: #333333;
+    }
+</style>
 </head>
 <body>
 
-<div class="wrap">
-
-    <!-- Shop -->
-    <div class="shop-name">{{ shop.name|default:"Retail Shop" }}</div>
-    <div class="shop-meta">
-        {% if shop.address %}{{ shop.address }}<br />{% endif %}
-        {% if shop.mobile_number %}Ph: {{ shop.mobile_number }}{% endif %}
-        {% if shop.gst_number %}{% if shop.mobile_number %} &nbsp;&middot;&nbsp; {% endif %}GSTIN: {{ shop.gst_number }}{% endif %}
-    </div>
-
-    <div class="accent"></div>
-
-    <!-- Bill + customer info (single soft panel, no grid) -->
-    <table class="info-panel" cellpadding="0" cellspacing="0">
+<div class="frame">
+    <table class="frame-top" cellpadding="0" cellspacing="0">
         <tr>
-            <td style="width: 34%;">
-                <div class="doc-title">Tax Invoice</div>
-            </td>
-            <td class="right" style="width: 33%;">
-                <div class="meta-label">Bill No.</div>
-                <div class="meta-value">{{ bill.bill_number }}</div>
-                <div class="meta-line">{{ bill.created_at|date:"d M Y, h:i A" }}</div>
-            </td>
-            <td class="right" style="width: 33%;">
-                <div class="meta-label">Payment</div>
-                <div class="meta-value">
-                    {% if bill.payment_method == "qr" %}UPI / QR{% else %}{{ bill.payment_method|title }}{% endif %}
-                    &nbsp;&middot;&nbsp;
-                    {% if bill.payment_status == "paid" %}
-                        <span class="status-paid">Paid</span>
-                    {% else %}
-                        <span class="status-failed">Unpaid</span>
-                    {% endif %}
-                </div>
-            </td>
-        </tr>
-        <tr>
-            <td colspan="3" style="padding-top: 10px;">
-                <div class="meta-label">Billed To</div>
-                <div class="meta-value">{{ bill.customer.name|default:"Walk-in Customer" }}</div>
-                {% if bill.customer.phone or bill.customer.address %}
-                <div class="meta-line">
-                    {% if bill.customer.phone %}{{ bill.customer.phone }}{% endif %}
-                    {% if bill.customer.phone and bill.customer.address %} &nbsp;&middot;&nbsp; {% endif %}
-                    {% if bill.customer.address %}{{ bill.customer.address }}{% endif %}
-                </div>
-                {% endif %}
-            </td>
+            <td>&nbsp;</td>
+            <td class="inv-badge" style="width: 90px;">Invoice</td>
         </tr>
     </table>
 
-    <!-- Items: dark header bar only, light row separators -->
-    <table class="items" cellpadding="0" cellspacing="0">
-        <thead>
+    <div class="frame-inner">
+
+        <!-- ════ BRAND HEADER ════ -->
+        <div class="brand-wrap">
+            <table cellpadding="0" cellspacing="0" align="center" style="margin: 0 auto;">
+                <tr>
+                    <td class="brand-box">
+                        <div class="brand-name">{{ shop.name|default:"Retail Shop" }}</div>
+                        <div class="brand-tag">Retail Billing Invoice</div>
+                    </td>
+                </tr>
+            </table>
+            {% if shop.address %}
+            <div class="shop-address">{{ shop.address }}</div>
+            {% endif %}
+            {% if shop.mobile_number %}
+            <div class="shop-contact">Ph: {{ shop.mobile_number }}</div>
+            {% endif %}
+        </div>
+
+        <!-- ════ CLIENT & INVOICE META ════ -->
+        <table class="meta-row" cellpadding="0" cellspacing="0">
             <tr>
-                <th class="c" style="width: 24px;">#</th>
-                <th>Item</th>
-                <th class="c" style="width: 32px;">Qty</th>
-                <th class="r" style="width: 68px;">Rate</th>
-                <th class="r" style="width: 76px;">Amount</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for item in items %}
-            <tr {% if forloop.counter|divisibleby:2 %}class="alt"{% endif %}>
-                <td class="sr c">{{ forloop.counter }}</td>
-                <td>
-                    <div class="item-name">{{ item.product_variant.product.item_type.name|default:"Item" }}</div>
-                    {% if item.product_variant.size or item.product_variant.color or item.product_variant.product.company %}
-                    <div class="item-sub">
-                        {% if item.product_variant.product.company %}{{ item.product_variant.product.company.name|title }}{% endif %}
-                        {% if item.product_variant.size %}{% if item.product_variant.product.company %} &middot; {% endif %}{{ item.product_variant.size.name|upper }}{% endif %}
-                        {% if item.product_variant.color %}{% if item.product_variant.product.company or item.product_variant.size %} &middot; {% endif %}{{ item.product_variant.color.name|title }}{% endif %}
-                    </div>
+                <td style="width: 55%;">
+                    <div class="to-label">To,</div>
+                    <div class="to-name">{{ bill.customer.name|default:"Walk-in Customer" }}</div>
+                    {% if bill.customer.phone %}
+                    <div class="to-sub">{{ bill.customer.phone }}</div>
+                    {% endif %}
+                    {% if bill.customer.address %}
+                    <div class="to-sub">{{ bill.customer.address }}</div>
                     {% endif %}
                 </td>
-                <td class="c">{{ item.quantity }}</td>
-                <td class="r">{{ item.price|indian_amount }}</td>
-                <td class="r item-amt">{{ item.total_price|indian_amount }}</td>
+                <td style="width: 45%;" class="meta-right">
+                    <div class="meta-line">
+                        <span class="lbl">Invoice No</span> :
+                        <span class="val">{{ bill.bill_number }}</span>
+                    </div>
+                    <div class="meta-line">
+                        <span class="lbl">Invoice Dt</span> :
+                        <span class="val">{{ bill.created_at|date:"d-M-Y" }}</span>
+                    </div>
+                    <div class="meta-line">
+                        <span class="lbl">Time</span> :
+                        <span class="val">{{ bill.created_at|date:"g:i:s A" }}</span>
+                    </div>
+                    <div class="meta-line">
+                        <span class="lbl">Payment</span> :
+                        <span class="val">{% if bill.payment_method == "qr" %}UPI / QR{% else %}{{ bill.payment_method|title }}{% endif %}</span>
+                    </div>
+                    <div class="meta-line">
+                        <span class="lbl">Status</span> :
+                        <span class="val">{% if bill.payment_status == "paid" %}<span class="paid">Paid</span>{% else %}<span class="unpaid">Unpaid</span>{% endif %}</span>
+                    </div>
+                </td>
             </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+        </table>
 
-    <!-- Totals -->
-    <table cellpadding="0" cellspacing="0" class="totals-wrap">
-        <tr>
-            <td style="width: 52%; vertical-align: top;">
-                {% if bill.notes %}
-                <div class="remarks">
-                    <span class="meta-label">Note &nbsp;</span>{{ bill.notes }}
-                </div>
-                {% endif %}
-            </td>
-            <td style="width: 48%; vertical-align: top;">
-                <div class="totals-box">
-                    <table class="totals" cellpadding="0" cellspacing="0">
-                        <tr>
-                            <td class="label">Subtotal</td>
-                            <td class="value">Rs. {{ bill.subtotal|indian_amount }}</td>
+        <!-- ════ ITEMS TABLE ════ -->
+        <table class="items" cellpadding="0" cellspacing="0">
+            <thead>
+                <tr>
+                    <th class="sr" style="width: 6%;">Sr.</th>
+                    <th class="desc" style="width: 44%;">Description</th>
+                    <th class="qty" style="width: 8%;">Qty</th>
+                    <th class="num" style="width: 14%;">Rate</th>
+                    <th class="num" style="width: 13%;">Disc.</th>
+                    <th class="num" style="width: 15%;">Total</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for line in inv.line_items %}
+            {% with item=line.item %}
+                <tr>
+                    <td class="sr" nowrap="nowrap" valign="top">{{ forloop.counter }}</td>
+                    <td class="desc" valign="top">
+                        <div class="item-name">{{ item.product_variant.product.item_type.name|default:"Item" }}</div>
+                        {% if item.product_variant.size or item.product_variant.color or item.product_variant.product.company %}
+                        <div class="item-sub">
+                            {% if item.product_variant.product.company %}{{ item.product_variant.product.company.name|title }}{% endif %}
+                            {% if item.product_variant.size %}{% if item.product_variant.product.company %} &middot; {% endif %}{{ item.product_variant.size.name|upper }}{% endif %}
+                            {% if item.product_variant.color %}{% if item.product_variant.product.company or item.product_variant.size %} &middot; {% endif %}{{ item.product_variant.color.name|title }}{% endif %}
+                        </div>
+                        {% endif %}
+                    </td>
+                    <td class="qty" nowrap="nowrap" valign="top">{{ item.quantity }}</td>
+                    <td class="num" nowrap="nowrap" valign="top">{{ line.original_rate|indian_amount }}</td>
+                    <td class="num disc" nowrap="nowrap" valign="top">{% if line.has_discount %}- {{ line.discount_amount|indian_amount }}{% else %}&mdash;{% endif %}</td>
+                    <td class="num" nowrap="nowrap" valign="top">{{ line.net_amount|indian_amount }}</td>
+                </tr>
+            {% endwith %}
+            {% endfor %}
+                <tr class="body-spacer">
+                    <td>&nbsp;</td>
+                    <td>&nbsp;</td>
+                    <td>&nbsp;</td>
+                    <td>&nbsp;</td>
+                    <td>&nbsp;</td>
+                    <td>&nbsp;</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- ════ FOOTER ════ -->
+        <table class="footer" cellpadding="0" cellspacing="0">
+            <tr>
+                <td style="width: 34%;">
+                    <div class="foot-left">
+                        {% if shop.mobile_number %}
+                        <div class="contact">&#9742; {{ shop.mobile_number }}</div>
+                        {% endif %}
+                        <div class="legal">
+                            Terms &amp; Conditions Apply<br/>
+                            {% if shop.gst_number %}GSTIN : {{ shop.gst_number }}{% endif %}
+                        </div>
+                        {% if bill.notes %}
+                        <div class="note-block">
+                            <span class="note-label">Note:</span> {{ bill.notes }}
+                        </div>
+                        {% endif %}
+                    </div>
+                </td>
+                <td style="width: 32%;" class="foot-center">
+                    <div class="pay-info">
+                        Payment via {% if bill.payment_method == "qr" %}UPI / QR{% else %}{{ bill.payment_method|title }}{% endif %}
+                    </div>
+                    <div class="sign-line">Sign</div>
+                </td>
+                <td style="width: 34%;" class="foot-right">
+                    <table class="totals-table" cellpadding="0" cellspacing="0">
+                        <tr class="sub">
+                            <td class="tl">Subtotal</td>
+                            <td class="tv">{{ inv.gross_total|indian_amount }}</td>
                         </tr>
-                        {% if bill.custom_amount and bill.custom_amount != "0.00" %}
-                        <tr class="discount">
-                            <td class="label">
-                                Discount{% if bill.discount_percent and bill.discount_percent != "0.00" %} ({{ bill.discount_percent }}%){% endif %}
-                            </td>
-                            <td class="value">- Rs. {{ bill.custom_amount|indian_amount }}</td>
+                        {% if inv.has_item_discounts %}
+                        <tr class="disc-row">
+                            <td class="tl">Item Discount</td>
+                            <td class="tv">- {{ inv.item_discount_total|indian_amount }}</td>
+                        </tr>
+                        <tr class="sub">
+                            <td class="tl">Item Total</td>
+                            <td class="tv">{{ inv.subtotal|indian_amount }}</td>
                         </tr>
                         {% endif %}
-                        <tr class="grand-row">
-                            <td class="label">Grand Total</td>
-                            <td class="value">Rs. {{ bill.total_amount|indian_amount }}</td>
+                        {% if inv.has_bill_discount %}
+                        <tr class="disc-row">
+                            <td class="tl">Bill Discount{% if inv.bill_discount_percent > 0 %} ({{ inv.bill_discount_percent }}%){% endif %}</td>
+                            <td class="tv">- {{ inv.bill_discount|indian_amount }}</td>
+                        </tr>
+                        {% endif %}
+                        <tr class="grand">
+                            <td class="tl">Grand Total</td>
+                            <td class="tv">{{ inv.grand_total|indian_amount }}</td>
                         </tr>
                     </table>
-                </div>
-            </td>
-        </tr>
-    </table>
+                </td>
+            </tr>
+        </table>
 
-    <div class="footer">
-        <div class="thanks">Thank you for shopping with us!</div>
-        <div class="foot-note">Computer-generated invoice &mdash; no signature required</div>
     </div>
-
 </div>
 
 </body>

@@ -96,7 +96,10 @@ class SalesHistoryListSerializer(serializers.ModelSerializer):
 class SalesHistoryItemDetailSerializer(serializers.ModelSerializer):
     type_name = serializers.SerializerMethodField()
     amount = serializers.SerializerMethodField()
+    original_amount = serializers.SerializerMethodField()
+    final_amount = serializers.SerializerMethodField()
     discount = serializers.SerializerMethodField()
+    discount_percent = serializers.SerializerMethodField()
     total_amount = serializers.SerializerMethodField()
 
     class Meta:
@@ -105,7 +108,10 @@ class SalesHistoryItemDetailSerializer(serializers.ModelSerializer):
             "type_name",
             "quantity",
             "amount",
+            "original_amount",
+            "final_amount",
             "discount",
+            "discount_percent",
             "total_amount",
         ]
 
@@ -114,23 +120,36 @@ class SalesHistoryItemDetailSerializer(serializers.ModelSerializer):
         item_type = getattr(product, "item_type", None)
         return item_type.name if item_type else None
 
+    def _catalog_unit_price(self, obj):
+        return obj.original_price or obj.price or Decimal("0.00")
+
+    def _charged_unit_price(self, obj):
+        quantity = obj.quantity or 0
+        if quantity > 0:
+            return (obj.total_price or Decimal("0.00")) / Decimal(str(quantity))
+        return obj.total_price or Decimal("0.00")
+
     def get_amount(self, obj):
-        if (obj.custom_amount or Decimal("0.00")) > 0 and (obj.quantity or 0) > 0:
-            unit_price = (obj.total_price or Decimal("0.00")) / Decimal(str(obj.quantity))
-            return format_indian_amount(unit_price)
-        return format_indian_amount(obj.price)
+        # Catalog price per unit (before any employee override/discount).
+        return format_indian_amount(self._catalog_unit_price(obj))
+
+    def get_original_amount(self, obj):
+        return format_indian_amount(self._catalog_unit_price(obj))
+
+    def get_final_amount(self, obj):
+        # Per-unit price actually charged.
+        return format_indian_amount(self._charged_unit_price(obj))
 
     def get_discount(self, obj):
-        base_total = (obj.price or Decimal("0.00")) * (obj.quantity or 0)
-        if (obj.discount_percent or Decimal("0.00")) > 0:
-            discount = (base_total * obj.discount_percent) / Decimal("100")
-            return format_indian_amount(discount)
-        if (obj.custom_amount or Decimal("0.00")) > 0:
-            discount = (base_total - (obj.total_price or Decimal("0.00")))
-            if discount < 0:
-                discount = Decimal("0.00")
-            return format_indian_amount(discount)
-        return format_indian_amount(Decimal("0.00"))
+        # Discount = catalog total - charged total (0 if item price went up).
+        catalog_total = self._catalog_unit_price(obj) * (obj.quantity or 0)
+        discount = catalog_total - (obj.total_price or Decimal("0.00"))
+        if discount < 0:
+            discount = Decimal("0.00")
+        return format_indian_amount(discount)
+
+    def get_discount_percent(self, obj):
+        return format_indian_amount(obj.discount_percent or Decimal("0.00"))
 
     def get_total_amount(self, obj):
         return format_indian_amount(obj.total_price)
@@ -140,6 +159,7 @@ class SalesHistoryDetailSerializer(serializers.ModelSerializer):
     customer_name = serializers.SerializerMethodField()
     phone_number = serializers.SerializerMethodField()
     created_time = serializers.SerializerMethodField()
+    original_total = serializers.SerializerMethodField()
     subtotal = serializers.SerializerMethodField()
     discount_rs = serializers.SerializerMethodField()
     total_amount = serializers.SerializerMethodField()
@@ -154,6 +174,7 @@ class SalesHistoryDetailSerializer(serializers.ModelSerializer):
             "created_time",
             "payment_method",
             "whatsapp_status",
+            "original_total",
             "subtotal",
             "discount_rs",
             "total_amount",
@@ -169,6 +190,13 @@ class SalesHistoryDetailSerializer(serializers.ModelSerializer):
     def get_created_time(self, obj):
         local_time = timezone.localtime(obj.created_at)
         return local_time.strftime("%b %d, %Y, %I:%M %p")
+
+    def get_original_total(self, obj):
+        # Sum of catalog price × qty — never includes employee overrides above original.
+        original_total = Decimal("0.00")
+        for item in obj.bill_items.all():
+            original_total += (item.original_price or item.price or Decimal("0.00")) * (item.quantity or 0)
+        return format_indian_amount(original_total)
 
     def get_subtotal(self, obj):
         return format_indian_amount(obj.subtotal)
@@ -289,8 +317,9 @@ class BillCreateSerializer(serializers.Serializer):
                     }
                 )
 
-            price = Decimal(str(variant.final_price()))
-            base_total = price * quantity
+            # original_price = catalog price at billing time, never overwritten.
+            original_price = Decimal(str(variant.final_price()))
+            price = original_price
 
             item_discount_percent = item.get("discount_percent") or Decimal("0.00")
             item_custom_amount = item.get("custom_amount") or Decimal("0.00")
@@ -298,23 +327,28 @@ class BillCreateSerializer(serializers.Serializer):
                 raise serializers.ValidationError({"items": ["Custom amount cannot be negative."]})
 
             if item_custom_amount > 0:
-                line_total = item_custom_amount
-                price = (item_custom_amount / Decimal(str(quantity))).quantize(
-                    Decimal("0.01"),
-                    rounding=ROUND_HALF_UP,
-                )
+                # custom_amount is the per-unit final price.
+                # When custom > original, price on the bill becomes custom (e.g. 350 > 300).
+                # original_price stays as catalog price (300) for employee reporting.
+                if item_custom_amount > original_price:
+                    price = item_custom_amount
+                line_total = item_custom_amount * quantity
             elif item_discount_percent > 0:
-                item_discount = base_total * item_discount_percent / Decimal("100")
-                item_discount = min(item_discount, base_total)
-                line_total = max(base_total - item_discount, Decimal("0.00"))
+                unit_discount = price * item_discount_percent / Decimal("100")
+                unit_discount = min(unit_discount, price)
+                unit_after_discount = max(price - unit_discount, Decimal("0.00"))
+                line_total = unit_after_discount * quantity
             else:
-                line_total = base_total
+                line_total = price * quantity
+
+            line_total = line_total.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
             subtotal += line_total
 
             prepared_items.append(
                 {
                     "variant": variant,
                     "quantity": quantity,
+                    "original_price": original_price,
                     "price": price,
                     "discount_percent": item_discount_percent,
                     "custom_amount": item_custom_amount,
