@@ -1,6 +1,18 @@
+from django.contrib.auth.hashers import identify_hasher
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from apps.shops.models import Shop
+
+
+def _is_password_hashed(raw_value):
+    """True if the value is already a hashed password (any configured hasher)."""
+    if not raw_value:
+        return False
+    try:
+        identify_hasher(raw_value)
+        return True
+    except ValueError:
+        return False
 
 class User(AbstractUser):
 
@@ -40,7 +52,10 @@ class User(AbstractUser):
                     self.session_active = False
                     self.token_version += 1
 
-        if not self.password.startswith("pbkdf2"):
+        # Auto-hash only when a raw (unhashed) password was assigned directly.
+        # Using identify_hasher avoids double-hashing an already-hashed value
+        # regardless of which hasher produced it (pbkdf2, argon2, bcrypt, ...).
+        if not _is_password_hashed(self.password):
             self.set_password(self.password)
 
         super().save(*args, **kwargs)

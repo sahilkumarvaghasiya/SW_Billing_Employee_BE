@@ -82,8 +82,10 @@ TENANT_DOMAIN_SUFFIX = os.getenv("TENANT_DOMAIN_SUFFIX", "localhost").strip(".")
 
 
 MIDDLEWARE = [
-    "django_tenants.middleware.main.TenantMainMiddleware",
+    # CorsMiddleware must be first, before anything (like TenantMainMiddleware)
+    # that can short-circuit and return a response without CORS headers.
     "corsheaders.middleware.CorsMiddleware",
+    "django_tenants.middleware.main.TenantMainMiddleware",
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
