@@ -1,4 +1,5 @@
-from django.contrib.auth import authenticate
+import logging
+
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
@@ -6,9 +7,12 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from apps.accounts.serializers import EmployeeCreateSerializer, ChangePasswordSerializer, LogoutSerializer
+from apps.accounts.serializers import  ChangePasswordSerializer, LogoutSerializer
 from apps.accounts.models import User  
 from apps.accounts.jwt import CustomTokenObtainPairSerializer
+
+logger = logging.getLogger(__name__)
+
 
 class LoginView(APIView):
 
@@ -16,28 +20,39 @@ class LoginView(APIView):
 
     def post(self, request):
 
-        email = request.data.get("email")
-        password = request.data.get("password")
+        email = (request.data.get("email") or "").strip()
+        password = request.data.get("password") or ""
         force_login = request.data.get("force_login", False)
 
-        try:
-            user = User.objects.get(email=email)
-        except User.DoesNotExist:
-            return Response(
-                {"error": "Login failed. Invalid email or password"},
-                status=400,
-            )
-        
-        user = authenticate(
-            username=user.username,
-            password=password,
-        )
+        # Case-insensitive email match, so "Varshil@x.com" == "varshil@x.com".
+        user = User.objects.filter(email__iexact=email).first()
+
         if user is None:
+            logger.warning("Login failed: email not found -> %s", email)
             return Response(
                 {"error": "Login failed. Invalid email or password"},
                 status=400,
             )
-        
+
+        if not user.check_password(password):
+            logger.warning("Login failed: wrong password for %s", email)
+            return Response(
+                {"error": "Login failed. Invalid email or password"},
+                status=400,
+            )
+
+        if not user.is_active:
+            logger.warning("Login failed: inactive account %s", email)
+            return Response(
+                {
+                    "error": (
+                        "Your account is inactive. "
+                        "Please contact the administrator."
+                    )
+                },
+                status=403,
+            )
+
         if user.is_blocked:
             return Response(
                 {
