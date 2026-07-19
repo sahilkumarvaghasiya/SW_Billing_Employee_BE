@@ -16,7 +16,7 @@ from apps.manager.pagination import (
     ManagerStockItemsDetailsPagination,
     ManagerVendorBillsPagination,
 )
-from apps.manager.permissions import IsManager
+from apps.manager.permissions import IsManager, IsManagerOrEmployee
 from apps.manager.serializers import (
     ManagerBillListSerializer,
     ManagerBrandSerializer,
@@ -33,6 +33,7 @@ from apps.manager.serializers import (
     ManagerStockThresholdSerializer,
     ManagerVendorBillPaymentSerializer,
     ManagerVendorBillSerializer,
+    ManagerVendorBillsBulkPaySerializer,
 )
 from apps.manager.services.vendor_report_pdf import generate_vendor_report_pdf
 from apps.manager.utils import (
@@ -43,6 +44,7 @@ from apps.manager.utils import (
 from apps.manager.vendor_report import (
     vendor_report_bill_rows,
     vendor_report_entries,
+    vendor_report_payable_groups,
     vendor_report_summary,
 )
 from apps.accounts.models import User
@@ -737,7 +739,7 @@ class ManagerStockThresholdViewSet(viewsets.ViewSet):
 
 
 class ManagerVendorSummaryViewSet(viewsets.ViewSet):
-    permission_classes = [IsManager]
+    permission_classes = [IsManagerOrEmployee]
     http_method_names = ["get"]
 
     def list(self, request, *args, **kwargs):
@@ -777,7 +779,7 @@ class ManagerVendorSummaryViewSet(viewsets.ViewSet):
 
 
 class ManagerVendorReportViewSet(viewsets.ViewSet):
-    permission_classes = [IsManager]
+    permission_classes = [IsManagerOrEmployee]
     http_method_names = ["get"]
 
     def list(self, request, *args, **kwargs):
@@ -797,19 +799,13 @@ class ManagerVendorReportViewSet(viewsets.ViewSet):
 
 
 class ManagerVendorReportPdfViewSet(viewsets.ViewSet):
-    permission_classes = [IsManager]
+    permission_classes = [IsManagerOrEmployee]
     http_method_names = ["get"]
 
     def list(self, request, *args, **kwargs):
         params = request.query_params
-        entries, start_date, end_date, vendor_ids = vendor_report_entries(params)
-        summary = vendor_report_summary(entries)
-        bills = vendor_report_bill_rows(entries)
-
-        if vendor_ids:
-            vendor_label = f"{len(vendor_ids)} selected vendor(s)"
-        else:
-            vendor_label = "All vendors"
+        entries, start_date, end_date, _vendor_ids = vendor_report_entries(params)
+        groups = vendor_report_payable_groups(entries)
 
         if start_date and end_date:
             period_label = (
@@ -822,19 +818,20 @@ class ManagerVendorReportPdfViewSet(viewsets.ViewSet):
         else:
             period_label = "All dates"
 
-        title = "Vendor report"
+        shop = getattr(request.user, "shop", None)
+        business_name = (shop.name if shop else None) or "—"
+
         pdf_bytes = generate_vendor_report_pdf(
-            title=title,
+            title="Contacts Payable",
+            business_name=business_name,
             period_label=period_label,
-            vendor_label=vendor_label,
-            summary=summary,
-            bills=bills,
+            groups=groups,
         )
 
-        filename = "vendor-report.pdf"
+        filename = "contacts-payable.pdf"
         if start_date and end_date:
             filename = (
-                f"vendor-report-{start_date.strftime('%Y%m%d')}-"
+                f"contacts-payable-{start_date.strftime('%Y%m%d')}-"
                 f"{end_date.strftime('%Y%m%d')}.pdf"
             )
 
@@ -844,7 +841,7 @@ class ManagerVendorReportPdfViewSet(viewsets.ViewSet):
 
 
 class ManagerVendorBillsViewSet(viewsets.ReadOnlyModelViewSet):
-    permission_classes = [IsManager]
+    permission_classes = [IsManagerOrEmployee]
     serializer_class = ManagerVendorBillSerializer
     pagination_class = ManagerVendorBillsPagination
     http_method_names = ["get", "patch"]
@@ -922,6 +919,141 @@ class ManagerVendorBillsViewSet(viewsets.ReadOnlyModelViewSet):
             {
                 "message": "Payment recorded successfully.",
                 "bill": ManagerVendorBillSerializer(entry).data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class ManagerVendorBillsBulkPayViewSet(viewsets.ViewSet):
+    """
+    Allocate one lump-sum payment across selected vendor bills.
+
+    Allocation policy is owned by the backend (currently oldest-first).
+    """
+
+    permission_classes = [IsManagerOrEmployee]
+    http_method_names = ["post"]
+
+    def create(self, request, *args, **kwargs):
+        serializer = ManagerVendorBillsBulkPaySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        bill_ids = serializer.validated_data["bill_ids"]
+        amount = serializer.validated_data["amount"]
+
+        with transaction.atomic():
+            entries = list(
+                StockEntry.objects.select_for_update()
+                .select_related("vendor")
+                .filter(id__in=bill_ids)
+            )
+
+            found_ids = {entry.id for entry in entries}
+            missing = [bill_id for bill_id in bill_ids if bill_id not in found_ids]
+            if missing:
+                raise ValidationError(
+                    {"bill_ids": [f"Unknown bill id(s): {missing}."]}
+                )
+
+            vendor_ids = {entry.vendor_id for entry in entries}
+            if len(vendor_ids) > 1:
+                raise ValidationError(
+                    {"bill_ids": ["All selected bills must belong to one vendor."]}
+                )
+
+            open_entries = []
+            for entry in entries:
+                if entry.is_fully_paid or entry.status == StockEntry.StatusChoices.PAID:
+                    raise ValidationError(
+                        {
+                            "bill_ids": [
+                                f"Bill {entry.stk_number} is already fully paid."
+                            ]
+                        }
+                    )
+                open_entries.append(entry)
+
+            # Backend allocation: oldest open bill first.
+            open_entries.sort(key=lambda e: (e.created_at, e.id))
+
+            total_pending = Decimal("0.00")
+            for entry in open_entries:
+                pending = (entry.total_amount or Decimal("0.00")) - (
+                    entry.paid_amount or Decimal("0.00")
+                )
+                if pending <= 0:
+                    raise ValidationError(
+                        {
+                            "bill_ids": [
+                                f"Bill {entry.stk_number} has no pending balance."
+                            ]
+                        }
+                    )
+                total_pending += pending
+
+            if amount > total_pending:
+                raise ValidationError(
+                    {
+                        "amount": [
+                            "Amount cannot exceed selected pending total "
+                            f"({format_indian_amount(total_pending)})."
+                        ]
+                    }
+                )
+
+            remaining = amount
+            allocations = []
+            updated_entries = []
+
+            for entry in open_entries:
+                if remaining <= 0:
+                    break
+
+                pending = (entry.total_amount or Decimal("0.00")) - (
+                    entry.paid_amount or Decimal("0.00")
+                )
+                applied = min(remaining, pending)
+                if applied <= 0:
+                    continue
+
+                paid = entry.paid_amount or Decimal("0.00")
+                entry.paid_amount = paid + applied
+                entry.save()
+
+                remaining -= applied
+                allocations.append(
+                    {
+                        "bill_id": entry.id,
+                        "applied": format_indian_amount(applied),
+                        "status": entry.get_status_display(),
+                    }
+                )
+                updated_entries.append(entry)
+
+        refreshed = (
+            StockEntry.objects.select_related("vendor")
+            .prefetch_related(
+                Prefetch(
+                    "stock_variants",
+                    queryset=ProductVariant.objects.select_related(
+                        "product", "product__item_type", "product__company"
+                    ),
+                )
+            )
+            .filter(id__in=[entry.id for entry in updated_entries])
+        )
+        bills_by_id = {entry.id: entry for entry in refreshed}
+        ordered_bills = [
+            bills_by_id[entry.id]
+            for entry in updated_entries
+            if entry.id in bills_by_id
+        ]
+
+        return Response(
+            {
+                "message": "Payment allocated successfully.",
+                "allocations": allocations,
+                "bills": ManagerVendorBillSerializer(ordered_bills, many=True).data,
             },
             status=status.HTTP_200_OK,
         )

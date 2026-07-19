@@ -589,3 +589,27 @@ class ManagerVendorBillPaymentSerializer(serializers.Serializer):
             )
 
         return attrs
+
+class ManagerVendorBillsBulkPaySerializer(serializers.Serializer):
+    bill_ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        allow_empty=False,
+        max_length=200,
+    )
+    amount = serializers.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        min_value=Decimal("0.01"),
+    )
+
+    def validate_bill_ids(self, value):
+        seen = set()
+        unique = []
+        for bill_id in value:
+            if bill_id in seen:
+                continue
+            seen.add(bill_id)
+            unique.append(bill_id)
+        if not unique:
+            raise serializers.ValidationError("Select at least one bill.")
+        return unique
