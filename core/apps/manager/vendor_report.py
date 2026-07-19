@@ -11,7 +11,7 @@ from apps.manager.serializers import ManagerVendorReportBillSerializer
 from apps.manager.utils import parse_id_list
 from apps.products.models import ProductVariant
 from apps.sales.utils import format_indian_amount
-from apps.vendors.models import StockEntry
+from apps.vendors.models import StockEntry, StockEntryTopUp
 
 
 def parse_vendor_report_date_range(params):
@@ -57,7 +57,15 @@ def vendor_report_entries(params):
                 queryset=ProductVariant.objects.select_related(
                     "product", "product__item_type", "product__company"
                 ),
-            )
+            ),
+            Prefetch(
+                "top_ups",
+                queryset=StockEntryTopUp.objects.select_related(
+                    "product_variant__product",
+                    "product_variant__product__item_type",
+                    "product_variant__product__company",
+                ),
+            ),
         )
         .order_by("-created_at")
     )

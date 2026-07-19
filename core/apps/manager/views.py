@@ -51,7 +51,7 @@ from apps.accounts.models import User
 from apps.products.models import Company, ItemType, Product, ProductVariant
 from apps.sales.models import Bill, BillItem, PaymentConfig
 from apps.sales.utils import format_indian_amount
-from apps.vendors.models import StockEntry
+from apps.vendors.models import StockEntry, StockEntryTopUp
 
 
 class ManagerOverviewViewSet(viewsets.ReadOnlyModelViewSet):
@@ -863,7 +863,15 @@ class ManagerVendorBillsViewSet(viewsets.ReadOnlyModelViewSet):
                     queryset=ProductVariant.objects.select_related(
                         "product", "product__item_type", "product__company"
                     ),
-                )
+                ),
+                Prefetch(
+                    "top_ups",
+                    queryset=StockEntryTopUp.objects.select_related(
+                        "product_variant__product",
+                        "product_variant__product__item_type",
+                        "product_variant__product__company",
+                    ),
+                ),
             )
         )
 
@@ -1038,7 +1046,15 @@ class ManagerVendorBillsBulkPayViewSet(viewsets.ViewSet):
                     queryset=ProductVariant.objects.select_related(
                         "product", "product__item_type", "product__company"
                     ),
-                )
+                ),
+                Prefetch(
+                    "top_ups",
+                    queryset=StockEntryTopUp.objects.select_related(
+                        "product_variant__product",
+                        "product_variant__product__item_type",
+                        "product_variant__product__company",
+                    ),
+                ),
             )
             .filter(id__in=[entry.id for entry in updated_entries])
         )

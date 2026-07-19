@@ -534,10 +534,14 @@ class ManagerVendorBillSerializer(serializers.ModelSerializer):
 
 
 def stock_lines_for_entry(entry):
-    """Aggregate product lines entered on a stock entry (item type + brand + qty)."""
+    """Aggregate product lines entered on a stock entry (item type + brand + qty).
+
+    Includes both new products (linked variants) and existing products that were
+    topped up in this entry (recorded as StockEntryTopUp with the qty added).
+    """
     products = {}
-    for variant in entry.stock_variants.all():
-        product = variant.product
+
+    def _bucket(product):
         product_id = product.id
         if product_id not in products:
             item_type_name = product.item_type.name if product.item_type else None
@@ -547,7 +551,14 @@ def stock_lines_for_entry(entry):
                 "brand": (brand_name or "").title() or None,
                 "qty": 0,
             }
-        products[product_id]["qty"] += variant.quantity or 0
+        return products[product_id]
+
+    for variant in entry.stock_variants.all():
+        _bucket(variant.product)["qty"] += variant.quantity or 0
+
+    for top_up in entry.top_ups.all():
+        _bucket(top_up.product_variant.product)["qty"] += top_up.quantity_added or 0
+
     return list(products.values())
 
 

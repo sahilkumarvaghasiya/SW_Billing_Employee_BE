@@ -8,7 +8,8 @@ from django.shortcuts import get_object_or_404
 from apps.accounts.permissions import IsEmployee
 from apps.manager.permissions import IsManager
 from apps.products.models import Color, ItemType, Product, ProductVariant, Size, Company
-from apps.vendors.models import StockEntry, Vendor
+from apps.products.serializers import ProductVariantDetailSerializer
+from apps.vendors.models import StockEntry, StockEntryTopUp, Vendor
 from apps.vendors.serializers import (
     GenerateBarcodeRequestSerializer,
     VendorStockCreateSerializer,
@@ -81,6 +82,15 @@ def update_existing_product(product_data, stock_entry):
             update_fields.append("original_purchase_price")
 
         existing.save(update_fields=update_fields)
+
+        StockEntryTopUp.objects.create(
+            stock_entry=stock_entry,
+            product_variant=existing,
+            quantity_added=variant["pieces"],
+            purchase_price=variant.get("purchase_price"),
+            sell_price=variant.get("sellprice"),
+        )
+
         updated_variants.append(existing)
         product = existing.product
 
@@ -115,6 +125,41 @@ class GenerateBarcodeViewSet(viewsets.ModelViewSet):
             },
             status=status.HTTP_200_OK,
         )
+
+class ScanExistingProductViewSet(viewsets.ViewSet):
+    """Look up a product variant by its barcode/QR number.
+
+    Used by the stock-entry flow: employee scans a product's QR; if a variant
+    with that barcode exists we return the same payload as the product detail
+    API so the UI can pre-fill and let the user top up its quantity.
+    """
+
+    permission_classes = [IsEmployee]
+    http_method_names = ["get"]
+
+    def retrieve(self, request, *args, **kwargs):
+        barcode_number = (kwargs.get("barcode_number") or "").strip()
+        if not barcode_number:
+            raise ValidationError({"barcode_number": "Barcode number is required."})
+
+        variant = (
+            ProductVariant.objects.select_related(
+                "product", "size", "color", "product__item_type", "product__company"
+            )
+            .filter(barcode_number=barcode_number, is_active=True)
+            .order_by("-created_at")
+            .first()
+        )
+
+        if not variant:
+            return Response(
+                {"message": "QR code not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        serializer = ProductVariantDetailSerializer(variant, context={"request": request})
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
 
 class VendorStockCreateViewSet(viewsets.ModelViewSet):
     queryset = StockEntry.objects.none()
@@ -585,10 +630,47 @@ class VendorStockHistoryDetailsViewset(viewsets.ReadOnlyModelViewSet):
 
             products[pid]["variants"].append(
                 {
-                    "size": v.size.name,
-                    "color": v.color.name,
+                    "size": v.size.name if v.size else None,
+                    "color": v.color.name if v.color else None,
                     "actual_price": v.original_purchase_price,
                     "quantity": v.quantity,
+                    "is_existing": False,
+                }
+            )
+        top_ups_qs = (
+            stock_entry.top_ups.select_related(
+                "product_variant",
+                "product_variant__product",
+                "product_variant__product__item_type",
+                "product_variant__product__company",
+                "product_variant__size",
+                "product_variant__color",
+            ).order_by("-created_at")
+        )
+
+        for top_up in top_ups_qs:
+            v = top_up.product_variant
+            p = v.product
+            pid = p.id
+            if pid not in products:
+                products[pid] = {
+                    "product_name": p.item_type.name if p.item_type else None,
+                    "company_name": p.company.name if p.company else None,
+                    "gender": p.gender,
+                    "variants": [],
+                }
+
+            products[pid]["variants"].append(
+                {
+                    "size": v.size.name if v.size else None,
+                    "color": v.color.name if v.color else None,
+                    "actual_price": (
+                        top_up.purchase_price
+                        if top_up.purchase_price is not None
+                        else v.original_purchase_price
+                    ),
+                    "quantity": top_up.quantity_added,
+                    "is_existing": True,
                 }
             )
 
