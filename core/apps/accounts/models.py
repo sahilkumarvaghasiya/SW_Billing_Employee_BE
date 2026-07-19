@@ -29,6 +29,7 @@ class User(AbstractUser):
     token_version = models.PositiveIntegerField(default=1)
     failed_device_login_count = models.PositiveIntegerField(default=0)
     is_blocked = models.BooleanField(default=False)
+    feature_access = models.JSONField(default=dict, blank=True)
     session_active = models.BooleanField(default=False)
     shop = models.ForeignKey(
         Shop,

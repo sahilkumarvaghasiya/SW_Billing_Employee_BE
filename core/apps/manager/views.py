@@ -16,12 +16,17 @@ from apps.manager.pagination import (
     ManagerStockItemsDetailsPagination,
     ManagerVendorBillsPagination,
 )
-from apps.manager.permissions import IsManager, IsManagerOrEmployee
+from apps.manager.permissions import (
+    IsManager,
+    IsManagerOrEmployee,
+    IsManagerOrEmployeeWithFeature,
+)
 from apps.manager.serializers import (
     ManagerBillListSerializer,
     ManagerBrandSerializer,
     ManagerEmployeeBlockSerializer,
     ManagerEmployeeCreateSerializer,
+    ManagerEmployeeFeatureAccessSerializer,
     ManagerEmployeeListSerializer,
     ManagerItemTypeSerializer,
     ManagerLowStockItemSerializer,
@@ -312,6 +317,28 @@ class ManagerEmployeeManageViewSet(viewsets.ModelViewSet):
             else "User unblocked successfully."
         )
         return Response({"message": message}, status=status.HTTP_200_OK)
+
+    def update_feature_access(self, request, *args, **kwargs):
+        from apps.accounts.feature_access import normalize_feature_access
+
+        employee = self.get_object()
+
+        serializer = ManagerEmployeeFeatureAccessSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        updates = serializer.validated_data["features"]
+
+        current = normalize_feature_access(getattr(employee, "feature_access", None))
+        current.update(updates)
+        employee.feature_access = current
+        employee.save(update_fields=["feature_access"])
+
+        return Response(
+            {
+                "message": "Feature access updated.",
+                "feature_access": current,
+            },
+            status=status.HTTP_200_OK,
+        )
 
     def destroy(self, request, *args, **kwargs):
         employee = self.get_object()
@@ -739,7 +766,8 @@ class ManagerStockThresholdViewSet(viewsets.ViewSet):
 
 
 class ManagerVendorSummaryViewSet(viewsets.ViewSet):
-    permission_classes = [IsManagerOrEmployee]
+    permission_classes = [IsManagerOrEmployeeWithFeature]
+    feature_access_key = "payable"
     http_method_names = ["get"]
 
     def list(self, request, *args, **kwargs):
@@ -779,7 +807,8 @@ class ManagerVendorSummaryViewSet(viewsets.ViewSet):
 
 
 class ManagerVendorReportViewSet(viewsets.ViewSet):
-    permission_classes = [IsManagerOrEmployee]
+    permission_classes = [IsManagerOrEmployeeWithFeature]
+    feature_access_key = "payable"
     http_method_names = ["get"]
 
     def list(self, request, *args, **kwargs):
@@ -799,7 +828,8 @@ class ManagerVendorReportViewSet(viewsets.ViewSet):
 
 
 class ManagerVendorReportPdfViewSet(viewsets.ViewSet):
-    permission_classes = [IsManagerOrEmployee]
+    permission_classes = [IsManagerOrEmployeeWithFeature]
+    feature_access_key = "payable"
     http_method_names = ["get"]
 
     def list(self, request, *args, **kwargs):
@@ -841,7 +871,8 @@ class ManagerVendorReportPdfViewSet(viewsets.ViewSet):
 
 
 class ManagerVendorBillsViewSet(viewsets.ReadOnlyModelViewSet):
-    permission_classes = [IsManagerOrEmployee]
+    permission_classes = [IsManagerOrEmployeeWithFeature]
+    feature_access_key = "payable"
     serializer_class = ManagerVendorBillSerializer
     pagination_class = ManagerVendorBillsPagination
     http_method_names = ["get", "patch"]
@@ -939,7 +970,8 @@ class ManagerVendorBillsBulkPayViewSet(viewsets.ViewSet):
     Allocation policy is owned by the backend (currently oldest-first).
     """
 
-    permission_classes = [IsManagerOrEmployee]
+    permission_classes = [IsManagerOrEmployeeWithFeature]
+    feature_access_key = "payable"
     http_method_names = ["post"]
 
     def create(self, request, *args, **kwargs):

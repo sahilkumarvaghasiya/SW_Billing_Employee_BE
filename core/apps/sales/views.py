@@ -10,7 +10,7 @@ from rest_framework import viewsets
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from apps.accounts.permissions import IsEmployee
+from apps.accounts.permissions import IsEmployee, IsEmployeeWithFeature
 from apps.manager.permissions import IsManager
 from apps.products.models import ProductVariant
 from apps.sales.notifications import (
@@ -39,7 +39,8 @@ from django.shortcuts import get_object_or_404
 
 class BarcodeProductLookupListView(viewsets.ReadOnlyModelViewSet):
     serializer_class = BarcodeLookupProductSerializer
-    permission_classes = [IsEmployee]
+    permission_classes = [IsEmployeeWithFeature]
+    feature_access_key = "billing"
     pagination_class = SalesBarcodeLookupPagination
 
     def get_queryset(self):
@@ -99,7 +100,8 @@ class BarcodeProductLookupListView(viewsets.ReadOnlyModelViewSet):
 
 class CustomerLookupByPhoneViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = CustomerLookupSerializer
-    permission_classes = [IsEmployee]
+    permission_classes = [IsEmployeeWithFeature]
+    feature_access_key = "billing"
     http_method_names = ["get"]
 
     def list(self, request, *args, **kwargs):
@@ -118,7 +120,8 @@ class CustomerLookupByPhoneViewSet(viewsets.ReadOnlyModelViewSet):
 
 class PaymentConfigQRListViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = PaymentConfigQRListSerializer
-    permission_classes = [IsEmployee]
+    permission_classes = [IsEmployeeWithFeature]
+    feature_access_key = "billing"
     http_method_names = ["get"]
 
     def get_queryset(self):
@@ -168,7 +171,8 @@ class TodaySummaryViewSet(viewsets.ReadOnlyModelViewSet):
 
 class SalesHistoryListViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = SalesHistoryListSerializer
-    permission_classes = [IsEmployee]
+    permission_classes = [IsEmployeeWithFeature]
+    feature_access_key = "sales"
     pagination_class = SalesHistoryPagination
     http_method_names = ["get"]
 
@@ -224,7 +228,8 @@ class SalesHistoryListViewSet(viewsets.ReadOnlyModelViewSet):
 
 class SalesHistoryDetailViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = SalesHistoryDetailSerializer
-    permission_classes = [IsEmployee]
+    permission_classes = [IsEmployeeWithFeature]
+    feature_access_key = "sales"
     http_method_names = ["get"]
 
     def get_queryset(self):
@@ -239,7 +244,8 @@ class SalesHistoryDetailViewSet(viewsets.ReadOnlyModelViewSet):
 
 class BillCreateViewSet(viewsets.ModelViewSet):
     serializer_class = BillCreateSerializer
-    permission_classes = [IsEmployee]
+    permission_classes = [IsEmployeeWithFeature]
+    feature_access_key = "billing"
     http_method_names = ["post"]
     queryset = ProductVariant.objects.none()
 
@@ -398,7 +404,8 @@ class BillCreateViewSet(viewsets.ModelViewSet):
 
 
 class SendWhatsAppInvoiceView(APIView):
-    permission_classes = [IsEmployee]
+    permission_classes = [IsEmployeeWithFeature]
+    feature_access_key = "billing"
     http_method_names = ["post"]
 
     def post(self, request):

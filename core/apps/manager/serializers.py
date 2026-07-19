@@ -96,6 +96,8 @@ class ManagerEmployeeListSerializer(serializers.ModelSerializer):
     status = serializers.SerializerMethodField()
     created_at = serializers.SerializerMethodField()
 
+    feature_access = serializers.SerializerMethodField()
+
     class Meta:
         model = User
         fields = [
@@ -105,6 +107,7 @@ class ManagerEmployeeListSerializer(serializers.ModelSerializer):
             "phone_number",
             "is_active",
             "is_blocked",
+            "feature_access",
             "status",
             "created_at",
         ]
@@ -120,9 +123,34 @@ class ManagerEmployeeListSerializer(serializers.ModelSerializer):
         local_time = timezone.localtime(obj.date_joined)
         return local_time.strftime("%b %d, %Y, %I:%M %p")
 
+    def get_feature_access(self, obj):
+        from apps.accounts.feature_access import normalize_feature_access
+
+        return normalize_feature_access(getattr(obj, "feature_access", None))
+
 
 class ManagerEmployeeBlockSerializer(serializers.Serializer):
     is_blocked = serializers.BooleanField()
+
+
+class ManagerEmployeeFeatureAccessSerializer(serializers.Serializer):
+    """Partial update of employee section access. Example: {"features": {"billing": false}}"""
+
+    features = serializers.DictField(
+        child=serializers.BooleanField(),
+        allow_empty=False,
+    )
+
+    def validate_features(self, value):
+        from apps.accounts.feature_access import EMPLOYEE_FEATURES
+
+        unknown = [key for key in value.keys() if key not in EMPLOYEE_FEATURES]
+        if unknown:
+            raise serializers.ValidationError(
+                f"Invalid feature key(s): {unknown}. "
+                f"Allowed: {list(EMPLOYEE_FEATURES)}."
+            )
+        return value
 
 
 class ManagerPaymentConfigSerializer(serializers.ModelSerializer):

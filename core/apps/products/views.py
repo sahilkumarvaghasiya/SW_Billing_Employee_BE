@@ -1,5 +1,5 @@
 from rest_framework import viewsets
-from apps.accounts.permissions import IsEmployee
+from apps.accounts.permissions import IsEmployee, IsEmployeeWithFeature
 from apps.manager.permissions import IsManager
 from django_filters.rest_framework import DjangoFilterBackend
 from apps.products.models import Color, ItemType, ProductVariant, Size, Company
@@ -18,7 +18,8 @@ class ProductVariantListView(viewsets.ReadOnlyModelViewSet):
     serializer_class = ProductVariantListSerializer
     pagination_class = ProductPagination
     filter_backends = [DjangoFilterBackend]
-    permission_classes = [IsEmployee]
+    permission_classes = [IsEmployeeWithFeature]
+    feature_access_key = "products"
     filterset_class = ProductVariantFilter
 
     def get_queryset(self):
@@ -30,7 +31,8 @@ class ProductVariantListView(viewsets.ReadOnlyModelViewSet):
     
 class ProductVariantDetailView(viewsets.ReadOnlyModelViewSet):
     serializer_class = ProductVariantDetailSerializer
-    permission_classes = [IsEmployee]
+    permission_classes = [IsEmployeeWithFeature]
+    feature_access_key = "products"
 
     def get_queryset(self):
         return ProductVariant.objects.select_related(

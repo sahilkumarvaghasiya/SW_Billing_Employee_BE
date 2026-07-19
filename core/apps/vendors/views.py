@@ -5,8 +5,8 @@ from django.db.models import Q
 from rest_framework import status, viewsets
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
-from apps.accounts.permissions import IsEmployee
-from apps.manager.permissions import IsManager
+from apps.accounts.permissions import IsEmployee, IsEmployeeWithFeature
+from apps.manager.permissions import IsManager, IsManagerOrEmployeeWithFeature
 from apps.products.models import Color, ItemType, Product, ProductVariant, Size, Company
 from apps.products.serializers import ProductVariantDetailSerializer
 from apps.vendors.models import StockEntry, StockEntryTopUp, Vendor
@@ -107,7 +107,8 @@ def update_existing_product(product_data, stock_entry):
 class GenerateBarcodeViewSet(viewsets.ModelViewSet):
     queryset = StockEntry.objects.none()
     serializer_class = GenerateBarcodeRequestSerializer
-    permission_classes = [IsEmployee]
+    permission_classes = [IsEmployeeWithFeature]
+    feature_access_key = "stock"
     http_method_names = ["post"]
 
     def create(self, request, *args, **kwargs):
@@ -134,7 +135,8 @@ class ScanExistingProductViewSet(viewsets.ViewSet):
     API so the UI can pre-fill and let the user top up its quantity.
     """
 
-    permission_classes = [IsEmployee]
+    permission_classes = [IsEmployeeWithFeature]
+    feature_access_key = "stock"
     http_method_names = ["get"]
 
     def retrieve(self, request, *args, **kwargs):
@@ -164,7 +166,8 @@ class ScanExistingProductViewSet(viewsets.ViewSet):
 class VendorStockCreateViewSet(viewsets.ModelViewSet):
     queryset = StockEntry.objects.none()
     serializer_class = VendorStockCreateSerializer
-    permission_classes = [IsEmployee]
+    permission_classes = [IsEmployeeWithFeature]
+    feature_access_key = "stock"
     http_method_names = ["post"]
 
     @transaction.atomic
@@ -315,7 +318,8 @@ class VendorStockCreateViewSet(viewsets.ModelViewSet):
 class VendorExistingStockCreateViewSet(viewsets.ModelViewSet):
     queryset = StockEntry.objects.none()
     serializer_class = VendorExistingStockCreateSerializer
-    permission_classes = [IsEmployee]
+    permission_classes = [IsEmployeeWithFeature]
+    feature_access_key = "stock"
     http_method_names = ["post"]
 
     @transaction.atomic
@@ -446,7 +450,8 @@ class VendorExistingStockCreateViewSet(viewsets.ModelViewSet):
 
 class VendorListViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = VendorListSerializer
-    permission_classes = [IsEmployee | IsManager]
+    permission_classes = [IsManagerOrEmployeeWithFeature]
+    feature_access_key = "stock"
     pagination_class = VendorListPagination
     http_method_names = ["get"]
 
@@ -463,7 +468,8 @@ class VendorListViewSet(viewsets.ReadOnlyModelViewSet):
 
 class VendorValidationViewSet(viewsets.ModelViewSet):
     queryset = Vendor.objects.none()
-    permission_classes = [IsEmployee]
+    permission_classes = [IsEmployeeWithFeature]
+    feature_access_key = "stock"
     http_method_names = ["post"]
 
     def create(self, request, *args, **kwargs):
@@ -507,7 +513,8 @@ class VendorValidationViewSet(viewsets.ModelViewSet):
 
 
 class VendorStockHistoryListViewset(viewsets.ReadOnlyModelViewSet):
-    permission_classes = [IsEmployee]
+    permission_classes = [IsEmployeeWithFeature]
+    feature_access_key = "stock"
     http_method_names = ["get"]
     pagination_class = VendorStockHistoryPagination
 
@@ -599,7 +606,8 @@ class VendorStockHistoryDetailsViewset(viewsets.ReadOnlyModelViewSet):
     Response includes invoice metadata, totals, vendor info and a list of
     products with their variants.
     """
-    permission_classes = [IsEmployee]
+    permission_classes = [IsEmployeeWithFeature]
+    feature_access_key = "stock"
     http_method_names = ["get"]
 
     def list(self, request, *args, **kwargs):

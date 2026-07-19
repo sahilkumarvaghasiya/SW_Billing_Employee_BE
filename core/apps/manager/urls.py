@@ -55,6 +55,10 @@ urlpatterns = [
         ManagerEmployeeManageViewSet.as_view({"patch": "partial_update"}),
     ),
     path(
+        "employees/<int:pk>/feature-access/",
+        ManagerEmployeeManageViewSet.as_view({"patch": "update_feature_access"}),
+    ),
+    path(
         "employees/<int:pk>/delete/",
         ManagerEmployeeManageViewSet.as_view({"delete": "destroy"}),
     ),
