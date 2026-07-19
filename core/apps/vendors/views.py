@@ -51,6 +51,49 @@ def resolve_name_or_id(model_class, raw_value, field_name="field"):
     )
     return obj
 
+
+def update_existing_product(product_data, stock_entry):
+    """Top up quantity (and optionally price/purchase price) of existing variants.
+
+    Existing products are not re-created. Each variant is located by its
+    ProductVariant id; its quantity is incremented by the submitted pieces and
+    price / purchase price are updated only when provided.
+    """
+    updated_variants = []
+    product = None
+
+    for variant in product_data["item_variants"]:
+        variant_id = variant.get("variant_id")
+        existing = ProductVariant.objects.filter(id=variant_id, is_active=True).first()
+        if not existing:
+            raise ValidationError(
+                {"variant_id": f"Product variant {variant_id} does not exist."}
+            )
+
+        existing.quantity = (existing.quantity or 0) + variant["pieces"]
+
+        update_fields = ["quantity"]
+        if variant.get("sellprice") is not None:
+            existing.price = variant["sellprice"]
+            update_fields.append("price")
+        if variant.get("purchase_price") is not None:
+            existing.original_purchase_price = variant["purchase_price"]
+            update_fields.append("original_purchase_price")
+
+        existing.save(update_fields=update_fields)
+        updated_variants.append(existing)
+        product = existing.product
+
+    return {
+        "company_name": product.company.name if product and product.company else None,
+        "product_type": product.item_type.name if product and product.item_type else None,
+        "gender": product.gender if product else None,
+        "barcode_number": updated_variants[0].barcode_number if updated_variants else None,
+        "barcode_url": None,
+        "variant_count": len(updated_variants),
+        "is_existing": True,
+    }
+
 class GenerateBarcodeViewSet(viewsets.ModelViewSet):
     queryset = StockEntry.objects.none()
     serializer_class = GenerateBarcodeRequestSerializer
@@ -91,7 +134,7 @@ class VendorStockCreateViewSet(viewsets.ModelViewSet):
             vendor=vendor,
             total_amount=data["total_amount"],
             paid_amount=data["paid_amount"],
-            due_date=data["paymentdeadlinedate"],
+            due_date=data.get("paymentdeadlinedate"),
             notes=data.get("notes") or "",
         )
 
@@ -107,7 +150,7 @@ class VendorStockCreateViewSet(viewsets.ModelViewSet):
                 "status": stock_entry.status,
                 "total_amount": str(stock_entry.total_amount),
                 "paid_amount": str(stock_entry.paid_amount),
-                "paymentdeadlinedate": str(stock_entry.due_date),
+                "paymentdeadlinedate": str(stock_entry.due_date) if stock_entry.due_date else None,
                 "products": products,
             },
             status=status.HTTP_201_CREATED,
@@ -145,6 +188,10 @@ class VendorStockCreateViewSet(viewsets.ModelViewSet):
         result = []
 
         for product_data in products:
+            if product_data.get("is_existing"):
+                result.append(update_existing_product(product_data, stock_entry))
+                continue
+
             gender = normalize_gender(product_data["gender"])
 
             item_type = resolve_name_or_id(
@@ -183,7 +230,12 @@ class VendorStockCreateViewSet(viewsets.ModelViewSet):
 
             for variant in product_data["item_variants"]:
                 size = resolve_name_or_id(Size, variant["size"], "size")
-                color = resolve_name_or_id(Color, variant["colour"], "colour")
+                colour_value = variant.get("colour")
+                color = (
+                    resolve_name_or_id(Color, colour_value, "colour")
+                    if colour_value not in (None, "")
+                    else None
+                )
 
                 variants_to_create.append(
                     ProductVariant(
@@ -239,7 +291,7 @@ class VendorExistingStockCreateViewSet(viewsets.ModelViewSet):
             vendor=vendor,
             total_amount=data["total_amount"],
             paid_amount=data["paid_amount"],
-            due_date=data["paymentdeadlinedate"],
+            due_date=data.get("paymentdeadlinedate"),
             notes=data.get("notes") or "",
         )
 
@@ -256,7 +308,7 @@ class VendorExistingStockCreateViewSet(viewsets.ModelViewSet):
                 "status": stock_entry.status,
                 "total_amount": str(stock_entry.total_amount),
                 "paid_amount": str(stock_entry.paid_amount),
-                "paymentdeadlinedate": str(stock_entry.due_date),
+                "paymentdeadlinedate": str(stock_entry.due_date) if stock_entry.due_date else None,
                 "products": products,
             },
             status=status.HTTP_201_CREATED,
@@ -266,6 +318,10 @@ class VendorExistingStockCreateViewSet(viewsets.ModelViewSet):
         result = []
 
         for product_data in products:
+            if product_data.get("is_existing"):
+                result.append(update_existing_product(product_data, stock_entry))
+                continue
+
             gender = normalize_gender(product_data["gender"])
 
             item_type = resolve_name_or_id(
@@ -305,7 +361,12 @@ class VendorExistingStockCreateViewSet(viewsets.ModelViewSet):
 
             for variant in product_data["item_variants"]:
                 size = resolve_name_or_id(Size, variant["size"], "size")
-                color = resolve_name_or_id(Color, variant["colour"], "colour")
+                colour_value = variant.get("colour")
+                color = (
+                    resolve_name_or_id(Color, colour_value, "colour")
+                    if colour_value not in (None, "")
+                    else None
+                )
 
                 variants_to_create.append(
                     ProductVariant(

@@ -281,6 +281,7 @@ class BillCreateViewSet(viewsets.ModelViewSet):
             paid_amount=validated_data["computed_paid_amount"],
             payment_method=validated_data["payment_method"],
             payment_status=validated_data["payment_status"],
+            settlement_direction=validated_data["settlement_direction"],
             selected_payment_config=selected_payment_config,
             payment_config_name=selected_payment_config.name if selected_payment_config else None,
             payment_config_value=(
@@ -319,10 +320,13 @@ class BillCreateViewSet(viewsets.ModelViewSet):
             if not variant:
                 raise ValidationError(f"Variant not found: {item['variant'].pk}")
 
-            if variant.quantity < item["quantity"]:
-                raise ValidationError(f"Insufficient stock for variant {variant.id}")
+            if item.get("is_return"):
+                variant.quantity += item["quantity"]
+            else:
+                if variant.quantity < item["quantity"]:
+                    raise ValidationError(f"Insufficient stock for variant {variant.id}")
+                variant.quantity -= item["quantity"]
 
-            variant.quantity -= item["quantity"]
             variant.save(update_fields=["quantity", "updated_at"])
 
             handle_stock_level_notification(variant)
@@ -332,6 +336,7 @@ class BillCreateViewSet(viewsets.ModelViewSet):
                     bill=bill,
                     product_variant=variant,
                     quantity=item["quantity"],
+                    is_return=item.get("is_return", False),
                     original_price=item["original_price"],
                     price=item["price"],
                     discount_percent=item["discount_percent"],
@@ -359,6 +364,7 @@ class BillCreateViewSet(viewsets.ModelViewSet):
                     "custom_amount": str(bill.custom_amount),
                     "total_amount": str(bill.total_amount),
                     "paid_amount": str(bill.paid_amount),
+                    "settlement_direction": bill.settlement_direction,
                 },
                 "payment": {
                     "method": bill.payment_method,
@@ -376,6 +382,7 @@ class BillCreateViewSet(viewsets.ModelViewSet):
                         "id": item.id,
                         "product_variant_id": item.product_variant_id,
                         "quantity": item.quantity,
+                        "is_return": item.is_return,
                         "original_price": str(item.original_price),
                         "price": str(item.price),
                         "discount_percent": str(item.discount_percent),

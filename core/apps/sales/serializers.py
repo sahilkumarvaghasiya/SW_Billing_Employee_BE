@@ -219,6 +219,7 @@ class SalesHistoryDetailSerializer(serializers.ModelSerializer):
 class BillItemCreateSerializer(serializers.Serializer):
     product_variant_id = serializers.IntegerField()
     quantity = serializers.IntegerField(min_value=1)
+    is_return = serializers.BooleanField(required=False, default=False)
     discount_percent = serializers.DecimalField(max_digits=5, decimal_places=2, required=False, default=Decimal("0.00"))
     custom_amount = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, default=Decimal("0.00"))
 
@@ -259,7 +260,11 @@ class BillCreateSerializer(serializers.Serializer):
         bill_discount_percent = attrs.get("bill_discount_percent") or Decimal("0.00")
         bill_custom_amount = attrs.get("bill_custom_amount") or Decimal("0.00")
 
-        if bill_custom_amount < 0:
+        has_return_items = any(item.get("is_return") for item in (attrs.get("items") or []))
+
+        # A negative bill total is only valid when the bill contains return lines
+        # (shop refunding the customer). Pure sales must never go negative.
+        if bill_custom_amount < 0 and not has_return_items:
             raise serializers.ValidationError({"bill_custom_amount": ["Custom amount cannot be negative."]})
         if bill_discount_percent > 0 and bill_custom_amount > 0:
             raise serializers.ValidationError({"bill_custom_amount": ["Provide either discount percent or custom amount for the bill, not both."]})
@@ -304,8 +309,10 @@ class BillCreateSerializer(serializers.Serializer):
         for item in attrs["items"]:
             variant = variant_map[item["product_variant_id"]]
             quantity = item["quantity"]
+            is_return = bool(item.get("is_return"))
 
-            if variant.quantity < quantity:
+            # Return lines add stock back, so they don't need availability checks.
+            if not is_return and variant.quantity < quantity:
                 raise serializers.ValidationError(
                     {
                         "items": [
@@ -342,34 +349,61 @@ class BillCreateSerializer(serializers.Serializer):
                 line_total = price * quantity
 
             line_total = line_total.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-            subtotal += line_total
+
+            # Returns are stored as a negative contribution so the bill total
+            # nets sales against refunds.
+            signed_line_total = -line_total if is_return else line_total
+            subtotal += signed_line_total
 
             prepared_items.append(
                 {
                     "variant": variant,
                     "quantity": quantity,
+                    "is_return": is_return,
                     "original_price": original_price,
                     "price": price,
                     "discount_percent": item_discount_percent,
                     "custom_amount": item_custom_amount,
-                    "total_price": line_total,
+                    "total_price": signed_line_total,
                 }
             )
 
-        if bill_custom_amount > 0:
+        # `subtotal` is already net of returns (can be negative or zero).
+        if bill_custom_amount != 0:
+            # Explicit final total from the client (used for return/exchange bills).
             total_amount = bill_custom_amount
-        elif bill_discount_percent > 0:
+        elif bill_discount_percent > 0 and subtotal > 0:
             bill_discount_value = subtotal * bill_discount_percent / Decimal("100")
             bill_discount_value = min(bill_discount_value, subtotal)
             total_amount = max(subtotal - bill_discount_value, Decimal("0.00"))
         else:
             total_amount = subtotal
 
+        # Only return bills may settle to a non-positive amount.
+        if total_amount < 0 and not has_return_items:
+            raise serializers.ValidationError(
+                {"bill_custom_amount": ["Bill total cannot be negative."]}
+            )
+
+        if total_amount > 0:
+            settlement_direction = Bill.SettlementDirection.CUSTOMER_TO_SHOP
+        elif total_amount < 0:
+            settlement_direction = Bill.SettlementDirection.SHOP_TO_CUSTOMER
+        else:
+            settlement_direction = Bill.SettlementDirection.NONE
+
+        # When the shop pays the customer (or nothing is due) the money goes out
+        # in cash; there is no QR/card collection.
+        if settlement_direction != Bill.SettlementDirection.CUSTOMER_TO_SHOP:
+            attrs["payment_method"] = Bill.PaymentMethod.CASH
+            payment_config = None
+
         attrs["selected_payment_config"] = payment_config
         attrs["prepared_items"] = prepared_items
         attrs["computed_subtotal"] = subtotal
         attrs["computed_total_amount"] = total_amount
         attrs["computed_paid_amount"] = total_amount
+        attrs["settlement_direction"] = settlement_direction
         return attrs
 
 

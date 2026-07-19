@@ -75,18 +75,31 @@ class GenerateBarcodeRequestSerializer(serializers.Serializer):
 
 
 class StockProductVariantSerializer(serializers.Serializer):
-    size = LookupValueField()
-    colour = LookupValueField()
+    # For existing products the FE sends the ProductVariant id to top up.
+    variant_id = serializers.IntegerField(required=False, allow_null=True)
+    size = LookupValueField(required=False, allow_null=True)
+    colour = LookupValueField(required=False, allow_null=True)
+    # Quantity is always required (qty to add for existing, qty for new).
     pieces = serializers.IntegerField(min_value=1)
-    sellprice = serializers.DecimalField(max_digits=10, decimal_places=2, min_value=0.01)
-    purchase_price = serializers.DecimalField(max_digits=10, decimal_places=2, min_value=0.01)
+    # Optional for existing products; enforced for new products in StockProductSerializer.
+    sellprice = serializers.DecimalField(
+        max_digits=10, decimal_places=2, min_value=0.01, required=False, allow_null=True
+    )
+    purchase_price = serializers.DecimalField(
+        max_digits=10, decimal_places=2, min_value=0.01, required=False, allow_null=True
+    )
 
 
 class StockProductSerializer(serializers.Serializer):
+    is_existing = serializers.BooleanField(required=False, default=False)
     company_name = LookupValueField(required=False, allow_null=True)
-    product_type = LookupValueField()
-    gender = serializers.ChoiceField(choices=["boy", "girl", "men", "women"])
-    barcode_number = serializers.CharField(max_length=100)
+    product_type = LookupValueField(required=False, allow_null=True)
+    gender = serializers.ChoiceField(
+        choices=["boy", "girl", "men", "women"], required=False, allow_null=True
+    )
+    barcode_number = serializers.CharField(
+        max_length=100, required=False, allow_null=True, allow_blank=True
+    )
     barcode_url = serializers.CharField(required=False, allow_null=True, allow_blank=True)
     item_variants = StockProductVariantSerializer(many=True)
 
@@ -94,6 +107,33 @@ class StockProductSerializer(serializers.Serializer):
         if not value:
             raise serializers.ValidationError({"item_variants": "At least one item variant is required."})
         return value
+
+    def validate(self, attrs):
+        is_existing = attrs.get("is_existing", False)
+        variants = attrs.get("item_variants") or []
+
+        if is_existing:
+            for variant in variants:
+                if not variant.get("variant_id"):
+                    raise serializers.ValidationError(
+                        {"variant_id": "variant_id is required for existing products."}
+                    )
+        else:
+            if not attrs.get("product_type"):
+                raise serializers.ValidationError({"product_type": "This field is required."})
+            if not attrs.get("gender"):
+                raise serializers.ValidationError({"gender": "This field is required."})
+            if not attrs.get("barcode_number"):
+                raise serializers.ValidationError({"barcode_number": "This field is required."})
+            for variant in variants:
+                if variant.get("size") in (None, ""):
+                    raise serializers.ValidationError({"size": "This field is required."})
+                if variant.get("sellprice") is None:
+                    raise serializers.ValidationError({"sellprice": "This field is required."})
+                if variant.get("purchase_price") is None:
+                    raise serializers.ValidationError({"purchase_price": "This field is required."})
+
+        return attrs
 
 
 class VendorStockCreateSerializer(serializers.Serializer):
@@ -109,7 +149,7 @@ class VendorStockCreateSerializer(serializers.Serializer):
     )
     total_amount = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=0)
     paid_amount = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=0)
-    paymentdeadlinedate = serializers.DateField()
+    paymentdeadlinedate = serializers.DateField(required=False, allow_null=True)
     notes = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     products = StockProductSerializer(many=True)
 
@@ -140,7 +180,7 @@ class VendorStockCreateSerializer(serializers.Serializer):
 class VendorExistingStockCreateSerializer(serializers.Serializer):
     total_amount = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=0)
     paid_amount = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=0)
-    paymentdeadlinedate = serializers.DateField()
+    paymentdeadlinedate = serializers.DateField(required=False, allow_null=True)
     notes = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     products = StockProductSerializer(many=True)
 

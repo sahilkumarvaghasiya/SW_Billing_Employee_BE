@@ -66,6 +66,14 @@ class Bill(models.Model):
         PAID = "paid", "Paid"
         FAILED = "failed", "Failed"
 
+    class SettlementDirection(models.TextChoices):
+        # Normal sale: customer pays the shop.
+        CUSTOMER_TO_SHOP = "customer_to_shop", "Customer to shop"
+        # Net refund: shop pays the customer (total < 0).
+        SHOP_TO_CUSTOMER = "shop_to_customer", "Shop to customer"
+        # Even exchange: no money changes hands (total == 0).
+        NONE = "none", "None"
+
     class WhatsAppStatus(models.TextChoices):
         PENDING = "pending", "Pending"
         SENT = "sent", "Sent"
@@ -88,6 +96,11 @@ class Bill(models.Model):
     paid_amount = models.DecimalField(max_digits=10, decimal_places=2)
     payment_method = models.CharField(max_length=10, choices=PaymentMethod.choices)
     payment_status = models.CharField(max_length=10, choices=PaymentStatus.choices)
+    settlement_direction = models.CharField(
+        max_length=20,
+        choices=SettlementDirection.choices,
+        default=SettlementDirection.CUSTOMER_TO_SHOP,
+    )
     whatsapp_status = models.CharField(
         max_length=10,
         choices=WhatsAppStatus.choices,
@@ -157,6 +170,7 @@ class BillItem(models.Model):
         related_name="bill_items"
     )
     quantity = models.PositiveIntegerField(validators=[MinValueValidator(1)])
+    is_return = models.BooleanField(default=False)
     original_price = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
     price = models.DecimalField(max_digits=10, decimal_places=2)
     discount_percent = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal("0.00"))
