@@ -168,6 +168,7 @@ class SalesHistoryDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = Bill
         fields = [
+            "id",
             "bill_number",
             "customer_name",
             "phone_number",

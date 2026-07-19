@@ -402,7 +402,7 @@ class SendWhatsAppInvoiceView(APIView):
     http_method_names = ["post"]
 
     def post(self, request):
-        bill_id = request.data.get("bill_id")
+        bill_id = (request.data.get("bill_id") or "").strip()
         if not bill_id:
             raise ValidationError({"bill_id": ["This field is required."]})
 
