@@ -502,6 +502,7 @@ class ManagerVendorBillSerializer(serializers.ModelSerializer):
     vendor = serializers.SerializerMethodField()
     stk_no = serializers.CharField(source="stk_number")
     bill_date = serializers.SerializerMethodField()
+    due_date = serializers.SerializerMethodField()
     total = serializers.SerializerMethodField()
     paid = serializers.SerializerMethodField()
     pending = serializers.SerializerMethodField()
@@ -514,6 +515,7 @@ class ManagerVendorBillSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "due",
+            "due_date",
             "vendor",
             "stk_no",
             "bill_date",
@@ -529,6 +531,11 @@ class ManagerVendorBillSerializer(serializers.ModelSerializer):
 
     def get_bill_date(self, obj):
         return timezone.localtime(obj.created_at).strftime("%Y-%m-%d")
+
+    def get_due_date(self, obj):
+        if not obj.due_date:
+            return None
+        return obj.due_date.strftime("%Y-%m-%d")
 
     def get_total(self, obj):
         return format_indian_amount(obj.total_amount or Decimal("0.00"))

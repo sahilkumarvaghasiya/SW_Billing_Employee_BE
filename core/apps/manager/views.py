@@ -1013,8 +1013,15 @@ class ManagerVendorBillsBulkPayViewSet(viewsets.ViewSet):
                     )
                 open_entries.append(entry)
 
-            # Backend allocation: oldest open bill first.
-            open_entries.sort(key=lambda e: (e.created_at, e.id))
+            # Nearest due date first (null due dates last), then oldest.
+            open_entries.sort(
+                key=lambda e: (
+                    e.due_date is None,
+                    e.due_date or timezone.localdate(),
+                    e.created_at,
+                    e.id,
+                )
+            )
 
             total_pending = Decimal("0.00")
             for entry in open_entries:

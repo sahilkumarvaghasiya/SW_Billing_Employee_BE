@@ -1,31 +1,66 @@
-from datetime import datetime
+from datetime import datetime, timedelta
+from decimal import Decimal
+
+from django.conf import settings
 from django.core.files.storage import default_storage
 from django.db import transaction, IntegrityError
-from django.db.models import Q
+from rest_framework.exceptions import ValidationError
+from django.db.models import (
+    Case,
+    Count,
+    DecimalField,
+    ExpressionWrapper,
+    F,
+    IntegerField,
+    Min,
+    Prefetch,
+    Q,
+    Sum,
+    Value,
+    When,
+)
+from django.db.models.functions import Coalesce
+from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.response import Response
-from django.shortcuts import get_object_or_404
+
 from apps.accounts.permissions import IsEmployee, IsEmployeeWithFeature
 from apps.manager.permissions import IsManager, IsManagerOrEmployeeWithFeature
+from apps.manager.serializers import ManagerVendorBillSerializer
 from apps.products.models import Color, ItemType, Product, ProductVariant, Size, Company
 from apps.products.serializers import ProductVariantDetailSerializer
-from apps.vendors.models import StockEntry, StockEntryTopUp, Vendor
+from apps.sales.utils import format_indian_amount
+from apps.vendors.models import (
+    StockEntry,
+    StockEntryTopUp,
+    Vendor,
+    VendorPayment,
+    VendorPaymentAllocation,
+)
+from apps.vendors.paginations import (
+    VendorListPagination,
+    VendorPayablePendingBillsPagination,
+    VendorPayableVendorsPagination,
+    VendorStockHistoryPagination,
+)
 from apps.vendors.serializers import (
     GenerateBarcodeRequestSerializer,
+    VendorPayableInfoSerializer,
+    VendorPayablePaySerializer,
+    VendorPayableVendorSerializer,
+    VendorPaymentDetailSerializer,
     VendorStockCreateSerializer,
     VendorExistingStockCreateSerializer,
     VendorListSerializer,
     VendorValidationSerializer,
 )
-from apps.vendors.paginations import VendorListPagination, VendorStockHistoryPagination
 from apps.vendors.utils import (
     build_barcode_number,
     generate_1d_barcode_image,
     normalize_gender,
     relative_media_path,
 )
-from django.core.exceptions import ValidationError
-from apps.sales.utils import format_indian_amount
 
 def resolve_name_or_id(model_class, raw_value, field_name="field"):
     """
@@ -697,3 +732,515 @@ class VendorStockHistoryDetailsViewset(viewsets.ReadOnlyModelViewSet):
         }
 
         return Response(response, status=status.HTTP_200_OK)
+
+
+class VendorPayableSummaryViewSet(viewsets.ModelViewSet):
+    """Employee Payable hub summary: open bills, overdue, due soon (.env window)."""
+
+    queryset = StockEntry.objects.none()
+    permission_classes = [IsEmployeeWithFeature]
+    feature_access_key = "payable"
+    http_method_names = ["get"]
+
+    def list(self, request, *args, **kwargs):
+        today = timezone.localdate()
+        alert_before_days = max(
+            int(getattr(settings, "VENDOR_DUE_ALERT_DAYS_BEFORE", 5)),
+            0,
+        )
+        due_soon_end = today + timedelta(days=alert_before_days)
+
+        pending = StockEntry.objects.filter(is_fully_paid=False)
+
+        total_pending = pending.aggregate(
+            amount=Coalesce(
+                Sum(
+                    F("total_amount") - Coalesce(F("paid_amount"), Decimal("0.00")),
+                    output_field=DecimalField(max_digits=14, decimal_places=2),
+                ),
+                Decimal("0.00"),
+                output_field=DecimalField(max_digits=14, decimal_places=2),
+            )
+        )["amount"]
+
+        pending_bills = pending.count()
+        overdue = pending.filter(due_date__isnull=False, due_date__lt=today).count()
+        due_soon = pending.filter(
+            due_date__isnull=False,
+            due_date__gte=today,
+            due_date__lte=due_soon_end,
+        ).count()
+
+        return Response(
+            {
+                "total_pending": format_indian_amount(total_pending),
+                "pending_bills": pending_bills,
+                "overdue": overdue,
+                "due_soon": due_soon,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class VendorPayableVendorsViewSet(viewsets.ModelViewSet):
+    """
+    Employee Payable vendor list.
+    Search by name. Pending vendors first (nearest due date), settled last.
+    """
+
+    serializer_class = VendorPayableVendorSerializer
+    permission_classes = [IsEmployeeWithFeature]
+    feature_access_key = "payable"
+    http_method_names = ["get"]
+    pagination_class = VendorPayableVendorsPagination
+
+    def get_queryset(self):
+        today = timezone.localdate()
+        search = (self.request.query_params.get("search") or "").strip()
+
+        pending_filter = Q(stock_entries__is_fully_paid=False)
+        overdue_filter = pending_filter & Q(
+            stock_entries__due_date__isnull=False,
+            stock_entries__due_date__lt=today,
+        )
+        pending_amount = ExpressionWrapper(
+            F("stock_entries__total_amount")
+            - Coalesce(F("stock_entries__paid_amount"), Value(Decimal("0.00"))),
+            output_field=DecimalField(max_digits=14, decimal_places=2),
+        )
+
+        queryset = (
+            Vendor.objects.filter(is_active=True)
+            .annotate(
+                entry_count=Count("stock_entries", distinct=True),
+                bills_count=Count(
+                    "stock_entries",
+                    filter=pending_filter,
+                    distinct=True,
+                ),
+                overdue_count=Count(
+                    "stock_entries",
+                    filter=overdue_filter,
+                    distinct=True,
+                ),
+                total_pending=Coalesce(
+                    Sum(
+                        pending_amount,
+                        filter=pending_filter,
+                    ),
+                    Value(Decimal("0.00")),
+                    output_field=DecimalField(max_digits=14, decimal_places=2),
+                ),
+                nearest_due_date=Min(
+                    "stock_entries__due_date",
+                    filter=pending_filter & Q(stock_entries__due_date__isnull=False),
+                ),
+            )
+            .filter(entry_count__gt=0)
+        )
+
+        if search:
+            queryset = queryset.filter(name__icontains=search)
+
+        return queryset.annotate(
+            sort_group=Case(
+                When(total_pending__gt=0, then=Value(0)),
+                default=Value(1),
+                output_field=IntegerField(),
+            )
+        ).order_by(
+            "sort_group",
+            F("nearest_due_date").asc(nulls_last=True),
+            "name",
+        )
+
+
+def _payable_pending_amount_annotation():
+    return Coalesce(
+        Sum(
+            ExpressionWrapper(
+                F("stock_entries__total_amount")
+                - Coalesce(F("stock_entries__paid_amount"), Value(Decimal("0.00"))),
+                output_field=DecimalField(max_digits=14, decimal_places=2),
+            ),
+            filter=Q(stock_entries__is_fully_paid=False),
+        ),
+        Value(Decimal("0.00")),
+        output_field=DecimalField(max_digits=14, decimal_places=2),
+    )
+
+
+def _payable_bill_queryset():
+    return (
+        StockEntry.objects.select_related("vendor")
+        .prefetch_related(
+            Prefetch(
+                "stock_variants",
+                queryset=ProductVariant.objects.select_related(
+                    "product", "product__item_type", "product__company"
+                ),
+            ),
+            Prefetch(
+                "top_ups",
+                queryset=StockEntryTopUp.objects.select_related(
+                    "product_variant__product",
+                    "product_variant__product__item_type",
+                    "product_variant__product__company",
+                ),
+            ),
+        )
+    )
+
+
+class VendorPayableInfoViewSet(viewsets.ModelViewSet):
+    """Employee Payable vendor Info tab."""
+
+    serializer_class = VendorPayableInfoSerializer
+    permission_classes = [IsEmployeeWithFeature]
+    feature_access_key = "payable"
+    http_method_names = ["get"]
+    lookup_field = "id"
+
+    def get_queryset(self):
+        return Vendor.objects.filter(is_active=True).annotate(
+            total_pending=_payable_pending_amount_annotation(),
+        )
+
+    def retrieve(self, request, *args, **kwargs):
+        vendor = self.get_object()
+        return Response(
+            self.get_serializer(vendor).data,
+            status=status.HTTP_200_OK,
+        )
+
+
+class VendorPayablePendingBillsViewSet(viewsets.ModelViewSet):
+    """
+    Employee Payable Pending tab for one vendor.
+    Optional start_date / end_date (DD-MM-YYYY) on bill date.
+    Ordered by nearest due date first.
+    """
+
+    serializer_class = ManagerVendorBillSerializer
+    permission_classes = [IsEmployeeWithFeature]
+    feature_access_key = "payable"
+    http_method_names = ["get"]
+    pagination_class = VendorPayablePendingBillsPagination
+
+    def get_queryset(self):
+        vendor_id = self.kwargs.get("id")
+        get_object_or_404(Vendor, id=vendor_id, is_active=True)
+
+        params = self.request.query_params
+        start_date_param = (params.get("start_date") or "").strip()
+        end_date_param = (params.get("end_date") or "").strip()
+
+        queryset = _payable_bill_queryset().filter(
+            vendor_id=vendor_id,
+            is_fully_paid=False,
+        )
+
+        if start_date_param:
+            try:
+                start_date = datetime.strptime(start_date_param, "%d-%m-%Y").date()
+            except ValueError as exc:
+                raise ValidationError(
+                    {"start_date": ["Invalid date format. Use DD-MM-YYYY."]}
+                ) from exc
+            queryset = queryset.filter(created_at__date__gte=start_date)
+
+        if end_date_param:
+            try:
+                end_date = datetime.strptime(end_date_param, "%d-%m-%Y").date()
+            except ValueError as exc:
+                raise ValidationError(
+                    {"end_date": ["Invalid date format. Use DD-MM-YYYY."]}
+                ) from exc
+            queryset = queryset.filter(created_at__date__lte=end_date)
+
+        return queryset.order_by(
+            F("due_date").asc(nulls_last=True),
+            "created_at",
+        )
+
+
+class VendorPayableBillDetailViewSet(viewsets.ModelViewSet):
+    """Employee Payable bill details (Pending → Details)."""
+
+    serializer_class = ManagerVendorBillSerializer
+    permission_classes = [IsEmployeeWithFeature]
+    feature_access_key = "payable"
+    http_method_names = ["get"]
+    lookup_field = "id"
+
+    def get_queryset(self):
+        return _payable_bill_queryset()
+
+
+class VendorPayablePayViewSet(viewsets.ModelViewSet):
+    """
+    Allocate across selected bills (nearest due date first):
+
+    1) paid amount (cash) → clears bills
+    2) optional discount (−) → clears extra pending after cash
+    3) optional surcharge (+) → stored only, does NOT clear bills
+
+    Example discount: select 1000+2000, pay 2500, discount 200
+    → 1000 clear, 2000 gets 1500+200, pending 300.
+
+    Example surcharge: select 1000+2000, pay 2500, surcharge 200
+    → 1000 clear, 2000 gets 1500 cash; then +200 added on last bill total
+    → that bill pending 500+200 = 700. Surcharge also stored on payment (+).
+    """
+
+    queryset = VendorPayment.objects.none()
+    permission_classes = [IsEmployeeWithFeature]
+    feature_access_key = "payable"
+    http_method_names = ["post"]
+
+    def create(self, request, *args, **kwargs):
+        vendor = get_object_or_404(Vendor, id=kwargs.get("id"), is_active=True)
+        serializer = VendorPayablePaySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        bill_ids = data["bill_ids"]
+        amount = data["amount"]
+        discount = data.get("discount") or Decimal("0.00")
+        surcharge = data.get("surcharge") or Decimal("0.00")
+        payment_date = data.get("payment_date") or timezone.localdate()
+
+        if discount > 0 and surcharge > 0:
+            raise ValidationError(
+                {"non_field_errors": ["Use either discount or surcharge, not both."]}
+            )
+
+        with transaction.atomic():
+            entries = list(
+                StockEntry.objects.select_for_update()
+                .select_related("vendor")
+                .filter(id__in=bill_ids, vendor_id=vendor.id)
+            )
+
+            found_ids = {entry.id for entry in entries}
+            missing = [bill_id for bill_id in bill_ids if bill_id not in found_ids]
+            if missing:
+                raise ValidationError(
+                    {"bill_ids": [f"Unknown bill id(s) for this vendor: {missing}."]}
+                )
+
+            open_entries = []
+            total_pending = Decimal("0.00")
+            for entry in entries:
+                if entry.is_fully_paid or entry.status == StockEntry.StatusChoices.PAID:
+                    raise ValidationError(
+                        {
+                            "bill_ids": [
+                                f"Bill {entry.stk_number} is already fully paid."
+                            ]
+                        }
+                    )
+                pending = (entry.total_amount or Decimal("0.00")) - (
+                    entry.paid_amount or Decimal("0.00")
+                )
+                if pending <= 0:
+                    raise ValidationError(
+                        {
+                            "bill_ids": [
+                                f"Bill {entry.stk_number} has no pending balance."
+                            ]
+                        }
+                    )
+                total_pending += pending
+                open_entries.append(entry)
+
+            if amount > total_pending:
+                raise ValidationError(
+                    {
+                        "amount": [
+                            "Amount cannot exceed selected pending "
+                            f"({format_indian_amount(total_pending)})."
+                        ]
+                    }
+                )
+            if discount > total_pending:
+                raise ValidationError(
+                    {
+                        "discount": [
+                            "Discount cannot exceed selected pending "
+                            f"({format_indian_amount(total_pending)})."
+                        ]
+                    }
+                )
+            if amount + discount > total_pending:
+                raise ValidationError(
+                    {
+                        "amount": [
+                            "Paid + discount cannot exceed selected pending "
+                            f"({format_indian_amount(total_pending)})."
+                        ]
+                    }
+                )
+
+            open_entries.sort(
+                key=lambda e: (
+                    e.due_date is None,
+                    e.due_date or timezone.localdate(),
+                    e.created_at,
+                    e.id,
+                )
+            )
+
+            payment = VendorPayment.objects.create(
+                vendor=vendor,
+                amount=amount,
+                discount=discount,
+                surcharge=surcharge,
+                payment_date=payment_date,
+            )
+
+            allocation_totals = {entry.id: Decimal("0.00") for entry in open_entries}
+            updated_ids = set()
+
+            def _apply_chunk(budget):
+                remaining = budget
+                if remaining <= 0:
+                    return
+                for entry in open_entries:
+                    if remaining <= 0:
+                        break
+                    pending = (entry.total_amount or Decimal("0.00")) - (
+                        entry.paid_amount or Decimal("0.00")
+                    )
+                    applied = min(remaining, pending)
+                    if applied <= 0:
+                        continue
+                    entry.paid_amount = (entry.paid_amount or Decimal("0.00")) + applied
+                    entry.save()
+                    allocation_totals[entry.id] += applied
+                    updated_ids.add(entry.id)
+                    remaining -= applied
+
+            # Cash + discount clear bills (−).
+            _apply_chunk(amount)
+            _apply_chunk(discount)
+
+            # Surcharge (+): increase last selected bill's total (adds pending).
+            if surcharge > 0 and open_entries:
+                last_bill = open_entries[-1]
+                last_bill.total_amount = (
+                    last_bill.total_amount or Decimal("0.00")
+                ) + surcharge
+                last_bill.save()
+                updated_ids.add(last_bill.id)
+
+            for entry in open_entries:
+                applied = allocation_totals.get(entry.id) or Decimal("0.00")
+                if applied <= 0:
+                    continue
+                VendorPaymentAllocation.objects.create(
+                    payment=payment,
+                    stock_entry=entry,
+                    applied_amount=applied,
+                )
+
+        payment = (
+            VendorPayment.objects.select_related("vendor")
+            .prefetch_related("allocations__stock_entry")
+            .get(id=payment.id)
+        )
+        bills = ManagerVendorBillSerializer(
+            _payable_bill_queryset().filter(id__in=list(updated_ids)),
+            many=True,
+        ).data
+
+        return Response(
+            {
+                "message": "Payment allocated successfully.",
+                "payment": VendorPaymentDetailSerializer(payment).data,
+                "bills": bills,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class VendorPayableStatementViewSet(viewsets.ModelViewSet):
+    """Vendor statement: purchases + persisted payments (newest first)."""
+
+    queryset = Vendor.objects.none()
+    permission_classes = [IsEmployeeWithFeature]
+    feature_access_key = "payable"
+    http_method_names = ["get"]
+
+    def list(self, request, *args, **kwargs):
+        vendor = get_object_or_404(Vendor, id=kwargs.get("id"), is_active=True)
+        params = request.query_params
+        start_date_param = (params.get("start_date") or "").strip()
+        end_date_param = (params.get("end_date") or "").strip()
+
+        start_date = None
+        end_date = None
+        if start_date_param:
+            try:
+                start_date = datetime.strptime(start_date_param, "%d-%m-%Y").date()
+            except ValueError as exc:
+                raise ValidationError(
+                    {"start_date": ["Invalid date format. Use DD-MM-YYYY."]}
+                ) from exc
+        if end_date_param:
+            try:
+                end_date = datetime.strptime(end_date_param, "%d-%m-%Y").date()
+            except ValueError as exc:
+                raise ValidationError(
+                    {"end_date": ["Invalid date format. Use DD-MM-YYYY."]}
+                ) from exc
+
+        bills_qs = _payable_bill_queryset().filter(vendor_id=vendor.id)
+        payments_qs = (
+            VendorPayment.objects.filter(vendor_id=vendor.id)
+            .prefetch_related("allocations__stock_entry")
+            .order_by("-payment_date", "-created_at")
+        )
+
+        if start_date:
+            bills_qs = bills_qs.filter(created_at__date__gte=start_date)
+            payments_qs = payments_qs.filter(payment_date__gte=start_date)
+        if end_date:
+            bills_qs = bills_qs.filter(created_at__date__lte=end_date)
+            payments_qs = payments_qs.filter(payment_date__lte=end_date)
+
+        results = []
+        for bill in bills_qs.order_by("-created_at"):
+            results.append(
+                {
+                    "kind": "purchase",
+                    "sort_at": timezone.localtime(bill.created_at).isoformat(),
+                    "bill": ManagerVendorBillSerializer(bill).data,
+                }
+            )
+        for payment in payments_qs:
+            results.append(
+                {
+                    "kind": "payment",
+                    "sort_at": timezone.localtime(payment.created_at).isoformat(),
+                    "payment": VendorPaymentDetailSerializer(payment).data,
+                }
+            )
+
+        results.sort(key=lambda row: row["sort_at"], reverse=True)
+        return Response({"results": results}, status=status.HTTP_200_OK)
+
+
+class VendorPayablePaymentDetailViewSet(viewsets.ModelViewSet):
+    """Persisted payment details for Statement → Payment tap."""
+
+    serializer_class = VendorPaymentDetailSerializer
+    permission_classes = [IsEmployeeWithFeature]
+    feature_access_key = "payable"
+    http_method_names = ["get"]
+    lookup_field = "id"
+
+    def get_queryset(self):
+        return VendorPayment.objects.select_related("vendor").prefetch_related(
+            "allocations__stock_entry"
+        )

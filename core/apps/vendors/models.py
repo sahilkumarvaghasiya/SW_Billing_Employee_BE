@@ -201,3 +201,56 @@ class StockEntryTopUp(models.Model):
 
     def __str__(self):
         return f"{self.stock_entry.stk_number} (+{self.quantity_added})"
+
+
+class VendorPayment(models.Model):
+    """One lump-sum payment event against a vendor (may cover many bills)."""
+
+    vendor = models.ForeignKey(
+        Vendor,
+        on_delete=models.CASCADE,
+        related_name="payments",
+    )
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    discount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    surcharge = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    payment_date = models.DateField(db_index=True)
+    notes = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-payment_date", "-created_at"]
+        indexes = [
+            models.Index(fields=["vendor", "payment_date"]),
+        ]
+
+    def __str__(self):
+        return f"PAY-{self.id} {self.vendor_id} {self.amount}"
+
+
+class VendorPaymentAllocation(models.Model):
+    """How much of a VendorPayment was applied to one stock entry bill."""
+
+    payment = models.ForeignKey(
+        VendorPayment,
+        on_delete=models.CASCADE,
+        related_name="allocations",
+    )
+    stock_entry = models.ForeignKey(
+        StockEntry,
+        on_delete=models.CASCADE,
+        related_name="payment_allocations",
+    )
+    applied_amount = models.DecimalField(max_digits=12, decimal_places=2)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["id"]
+        indexes = [
+            models.Index(fields=["payment"]),
+            models.Index(fields=["stock_entry"]),
+        ]
+
+    def __str__(self):
+        return f"{self.payment_id} → {self.stock_entry_id}: {self.applied_amount}"
