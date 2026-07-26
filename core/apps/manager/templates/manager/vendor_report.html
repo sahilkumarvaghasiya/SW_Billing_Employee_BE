@@ -1,95 +1,141 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8" />
-  <title>{{ title }}</title>
-  <style>
-    @page { size: A4 landscape; margin: 1.2cm; }
-    body { font-family: Helvetica, Arial, sans-serif; font-size: 11px; color: #0f172a; }
-    h1 { font-size: 18px; margin: 0 0 4px; }
-    .meta { color: #64748b; font-size: 10px; margin-bottom: 14px; }
-    .summary-table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
-    .summary-table td { border: 1px solid #e2e8f0; padding: 8px 10px; width: 25%; vertical-align: top; }
-    .summary-label { color: #64748b; font-size: 9px; text-transform: uppercase; letter-spacing: 0.04em; }
-    .summary-value { font-size: 14px; font-weight: 700; margin-top: 4px; }
-    h2 { font-size: 13px; margin: 0 0 8px; }
-    .bill-block { margin-bottom: 14px; page-break-inside: avoid; }
-    .bill-head { margin-bottom: 6px; }
-    .bill-title { font-weight: 700; font-size: 11px; }
-    .bill-meta { color: #64748b; font-size: 10px; margin-top: 2px; }
-    .lines-table, .bills-table { width: 100%; border-collapse: collapse; }
-    .lines-table th, .lines-table td, .bills-table th, .bills-table td {
-      border: 1px solid #e2e8f0; padding: 5px 7px; text-align: left;
-    }
-    .lines-table th, .bills-table th { background: #f8fafc; font-weight: 700; font-size: 10px; }
-    .num { text-align: right; white-space: nowrap; }
-    .empty { color: #64748b; padding: 12px 0; }
-    .no-lines { color: #64748b; font-size: 10px; font-style: italic; padding: 4px 0 8px; }
-  </style>
-</head>
-<body>
-  <h1>{{ title }}</h1>
-  <div class="meta">{{ vendor_label }} · {{ period_label }} · Generated {{ generated_at }}</div>
-
-  <table class="summary-table">
-    <tr>
-      <td>
-        <div class="summary-label">Bills</div>
-        <div class="summary-value">{{ summary.bills }}</div>
-      </td>
-      <td>
-        <div class="summary-label">Total billed</div>
-        <div class="summary-value">₹ {{ summary.total_billed }}</div>
-      </td>
-      <td>
-        <div class="summary-label">Total paid</div>
-        <div class="summary-value">₹ {{ summary.total_paid }}</div>
-      </td>
-      <td>
-        <div class="summary-label">Total pending</div>
-        <div class="summary-value">₹ {{ summary.total_pending }}</div>
-      </td>
-    </tr>
-  </table>
-
-  <h2>Vendor bills</h2>
-  {% if bills %}
-    {% for bill in bills %}
-    <section class="bill-block">
-      <div class="bill-head">
-        <div class="bill-title">{{ bill.vendor|default:"—" }} · {{ bill.stk_no }}</div>
-        <div class="bill-meta">
-          Bill date {{ bill.bill_date }} · Due {{ bill.due.label|default:"—" }} · {{ bill.status }}
-          · Total ₹ {{ bill.total }} · Paid ₹ {{ bill.paid }} · Pending ₹ {{ bill.pending }}
-        </div>
-      </div>
-      {% if bill.stock_lines %}
-      <table class="lines-table">
-        <thead>
-          <tr>
-            <th>Item type</th>
-            <th>Brand</th>
-            <th class="num">Qty</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for line in bill.stock_lines %}
-          <tr>
-            <td>{{ line.item_type|default:"—" }}</td>
-            <td>{{ line.brand|default:"—" }}</td>
-            <td class="num">{{ line.qty }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-      {% else %}
-      <p class="no-lines">No stock lines recorded for this entry.</p>
-      {% endif %}
-    </section>
-    {% endfor %}
-  {% else %}
-  <p class="empty">No bills in this period.</p>
-  {% endif %}
-</body>
-</html>
-
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>{{ title }}</title>
+  <style>
+    @page { size: A4 landscape; margin: 1.4cm 1.6cm; }
+    body {
+      font-family: Helvetica, Arial, sans-serif;
+      font-size: 11px;
+      color: #111111;
+      margin: 0;
+    }
+    .header {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 6px;
+    }
+    .header td { vertical-align: bottom; padding: 0; }
+    .title {
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+    .business {
+      font-size: 13px;
+      font-weight: 700;
+      text-align: right;
+      text-transform: uppercase;
+    }
+    .header-rule {
+      border: none;
+      border-top: 2px solid #111111;
+      margin: 0 0 18px;
+    }
+    .payable-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .payable-table th {
+      text-align: left;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 0 8px 8px 0;
+      border-bottom: 1.5px solid #7dd3fc;
+      color: #111111;
+    }
+    .payable-table th.num,
+    .payable-table td.num {
+      text-align: right;
+      white-space: nowrap;
+      padding-right: 0;
+    }
+    .payable-table th.due,
+    .payable-table td.due {
+      text-align: left;
+    }
+    .vendor-row td {
+      padding-top: 18px;
+      padding-bottom: 8px;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.01em;
+    }
+    .line-row td {
+      padding: 5px 8px 5px 0;
+      vertical-align: top;
+    }
+    .total-row td {
+      padding-top: 8px;
+      padding-bottom: 4px;
+      font-weight: 700;
+      border-top: 1px solid #111111;
+    }
+    .total-label {
+      text-align: left;
+      font-weight: 700;
+    }
+    .empty {
+      color: #64748b;
+      padding: 24px 0;
+      text-align: center;
+    }
+    .meta {
+      color: #64748b;
+      font-size: 9px;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <table class="header">
+    <tr>
+      <td class="title">{{ title }}</td>
+      <td class="business">{{ business_name }}</td>
+    </tr>
+  </table>
+  <hr class="header-rule" />
+
+  {% if groups %}
+  <table class="payable-table">
+    <thead>
+      <tr>
+        <th style="width: 14%;">Date</th>
+        <th style="width: 34%;">Description</th>
+        <th class="due" style="width: 14%;">Due Date</th>
+        <th class="num" style="width: 19%;">Amount (Rs.)</th>
+        <th class="num" style="width: 19%;">Pending Amount (Rs.)</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for group in groups %}
+      <tr class="vendor-row">
+        <td colspan="5">{{ group.vendor_name }}</td>
+      </tr>
+      {% for row in group.rows %}
+      <tr class="line-row">
+        <td>{{ row.date }}</td>
+        <td>{{ row.description }}</td>
+        <td class="due">{{ row.due_date }}</td>
+        <td class="num">{{ row.amount }}</td>
+        <td class="num">{{ row.pending }}</td>
+      </tr>
+      {% endfor %}
+      <tr class="total-row">
+        <td colspan="2"></td>
+        <td class="total-label">Total</td>
+        <td class="num">Rs. {{ group.total_amount }}</td>
+        <td class="num">Rs. {{ group.total_pending }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty">No vendor bills in this period.</p>
+  {% endif %}
+
+  <div class="meta">{{ period_label }} · Generated {{ generated_at }}</div>
+</body>
+</html>

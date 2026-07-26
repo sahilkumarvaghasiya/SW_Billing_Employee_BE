@@ -16,6 +16,7 @@ from apps.manager.views import (
     ManagerStockItemsDetailsViewSet,
     ManagerStockSummaryViewSet,
     ManagerStockThresholdViewSet,
+    ManagerVendorBillsBulkPayViewSet,
     ManagerVendorBillsViewSet,
     ManagerVendorReportPdfViewSet,
     ManagerVendorReportViewSet,
@@ -52,6 +53,10 @@ urlpatterns = [
     path(
         "employees/<int:pk>/block/",
         ManagerEmployeeManageViewSet.as_view({"patch": "partial_update"}),
+    ),
+    path(
+        "employees/<int:pk>/feature-access/",
+        ManagerEmployeeManageViewSet.as_view({"patch": "update_feature_access"}),
     ),
     path(
         "employees/<int:pk>/delete/",
@@ -91,6 +96,10 @@ urlpatterns = [
     path(
         "vendors/reports/pdf/",
         ManagerVendorReportPdfViewSet.as_view({"get": "list"}),
+    ),
+    path(
+        "vendors/bills/bulk-pay/",
+        ManagerVendorBillsBulkPayViewSet.as_view({"post": "create"}),
     ),
     path("", include(router.urls)),
 ]

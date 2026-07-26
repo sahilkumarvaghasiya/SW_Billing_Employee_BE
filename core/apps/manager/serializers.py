@@ -96,6 +96,8 @@ class ManagerEmployeeListSerializer(serializers.ModelSerializer):
     status = serializers.SerializerMethodField()
     created_at = serializers.SerializerMethodField()
 
+    feature_access = serializers.SerializerMethodField()
+
     class Meta:
         model = User
         fields = [
@@ -105,6 +107,7 @@ class ManagerEmployeeListSerializer(serializers.ModelSerializer):
             "phone_number",
             "is_active",
             "is_blocked",
+            "feature_access",
             "status",
             "created_at",
         ]
@@ -120,9 +123,34 @@ class ManagerEmployeeListSerializer(serializers.ModelSerializer):
         local_time = timezone.localtime(obj.date_joined)
         return local_time.strftime("%b %d, %Y, %I:%M %p")
 
+    def get_feature_access(self, obj):
+        from apps.accounts.feature_access import normalize_feature_access
+
+        return normalize_feature_access(getattr(obj, "feature_access", None))
+
 
 class ManagerEmployeeBlockSerializer(serializers.Serializer):
     is_blocked = serializers.BooleanField()
+
+
+class ManagerEmployeeFeatureAccessSerializer(serializers.Serializer):
+    """Partial update of employee section access. Example: {"features": {"billing": false}}"""
+
+    features = serializers.DictField(
+        child=serializers.BooleanField(),
+        allow_empty=False,
+    )
+
+    def validate_features(self, value):
+        from apps.accounts.feature_access import EMPLOYEE_FEATURES
+
+        unknown = [key for key in value.keys() if key not in EMPLOYEE_FEATURES]
+        if unknown:
+            raise serializers.ValidationError(
+                f"Invalid feature key(s): {unknown}. "
+                f"Allowed: {list(EMPLOYEE_FEATURES)}."
+            )
+        return value
 
 
 class ManagerPaymentConfigSerializer(serializers.ModelSerializer):
@@ -474,6 +502,7 @@ class ManagerVendorBillSerializer(serializers.ModelSerializer):
     vendor = serializers.SerializerMethodField()
     stk_no = serializers.CharField(source="stk_number")
     bill_date = serializers.SerializerMethodField()
+    due_date = serializers.SerializerMethodField()
     total = serializers.SerializerMethodField()
     paid = serializers.SerializerMethodField()
     pending = serializers.SerializerMethodField()
@@ -486,6 +515,7 @@ class ManagerVendorBillSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "due",
+            "due_date",
             "vendor",
             "stk_no",
             "bill_date",
@@ -501,6 +531,11 @@ class ManagerVendorBillSerializer(serializers.ModelSerializer):
 
     def get_bill_date(self, obj):
         return timezone.localtime(obj.created_at).strftime("%Y-%m-%d")
+
+    def get_due_date(self, obj):
+        if not obj.due_date:
+            return None
+        return obj.due_date.strftime("%Y-%m-%d")
 
     def get_total(self, obj):
         return format_indian_amount(obj.total_amount or Decimal("0.00"))
@@ -534,10 +569,14 @@ class ManagerVendorBillSerializer(serializers.ModelSerializer):
 
 
 def stock_lines_for_entry(entry):
-    """Aggregate product lines entered on a stock entry (item type + brand + qty)."""
+    """Aggregate product lines entered on a stock entry (item type + brand + qty).
+
+    Includes both new products (linked variants) and existing products that were
+    topped up in this entry (recorded as StockEntryTopUp with the qty added).
+    """
     products = {}
-    for variant in entry.stock_variants.all():
-        product = variant.product
+
+    def _bucket(product):
         product_id = product.id
         if product_id not in products:
             item_type_name = product.item_type.name if product.item_type else None
@@ -547,7 +586,14 @@ def stock_lines_for_entry(entry):
                 "brand": (brand_name or "").title() or None,
                 "qty": 0,
             }
-        products[product_id]["qty"] += variant.quantity or 0
+        return products[product_id]
+
+    for variant in entry.stock_variants.all():
+        _bucket(variant.product)["qty"] += variant.quantity or 0
+
+    for top_up in entry.top_ups.all():
+        _bucket(top_up.product_variant.product)["qty"] += top_up.quantity_added or 0
+
     return list(products.values())
 
 
@@ -589,3 +635,27 @@ class ManagerVendorBillPaymentSerializer(serializers.Serializer):
             )
 
         return attrs
+
+class ManagerVendorBillsBulkPaySerializer(serializers.Serializer):
+    bill_ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        allow_empty=False,
+        max_length=200,
+    )
+    amount = serializers.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        min_value=Decimal("0.01"),
+    )
+
+    def validate_bill_ids(self, value):
+        seen = set()
+        unique = []
+        for bill_id in value:
+            if bill_id in seen:
+                continue
+            seen.add(bill_id)
+            unique.append(bill_id)
+        if not unique:
+            raise serializers.ValidationError("Select at least one bill.")
+        return unique

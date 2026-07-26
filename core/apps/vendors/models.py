@@ -166,3 +166,91 @@ class StockEntry(models.Model):
                 alert_before_days=alert_before_days,
             )
         ]
+
+
+class StockEntryTopUp(models.Model):
+    """Records a top-up of an existing product variant within a stock entry.
+
+    New products are linked to a stock entry directly through
+    ProductVariant.stock_entry. Existing products, however, are merged into
+    their original variant (quantity increased in place), so this table keeps a
+    per-entry record of what was added, letting the stock history show them.
+    """
+
+    stock_entry = models.ForeignKey(
+        StockEntry,
+        on_delete=models.CASCADE,
+        related_name="top_ups",
+    )
+    product_variant = models.ForeignKey(
+        "products.ProductVariant",
+        on_delete=models.CASCADE,
+        related_name="stock_top_ups",
+    )
+    quantity_added = models.PositiveIntegerField()
+    purchase_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    sell_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["stock_entry"]),
+            models.Index(fields=["product_variant"]),
+        ]
+
+    def __str__(self):
+        return f"{self.stock_entry.stk_number} (+{self.quantity_added})"
+
+
+class VendorPayment(models.Model):
+    """One lump-sum payment event against a vendor (may cover many bills)."""
+
+    vendor = models.ForeignKey(
+        Vendor,
+        on_delete=models.CASCADE,
+        related_name="payments",
+    )
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    discount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    surcharge = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    payment_date = models.DateField(db_index=True)
+    notes = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-payment_date", "-created_at"]
+        indexes = [
+            models.Index(fields=["vendor", "payment_date"]),
+        ]
+
+    def __str__(self):
+        return f"PAY-{self.id} {self.vendor_id} {self.amount}"
+
+
+class VendorPaymentAllocation(models.Model):
+    """How much of a VendorPayment was applied to one stock entry bill."""
+
+    payment = models.ForeignKey(
+        VendorPayment,
+        on_delete=models.CASCADE,
+        related_name="allocations",
+    )
+    stock_entry = models.ForeignKey(
+        StockEntry,
+        on_delete=models.CASCADE,
+        related_name="payment_allocations",
+    )
+    applied_amount = models.DecimalField(max_digits=12, decimal_places=2)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["id"]
+        indexes = [
+            models.Index(fields=["payment"]),
+            models.Index(fields=["stock_entry"]),
+        ]
+
+    def __str__(self):
+        return f"{self.payment_id} → {self.stock_entry_id}: {self.applied_amount}"
