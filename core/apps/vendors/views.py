@@ -36,7 +36,11 @@ from apps.manager.vendor_report import (
     vendor_report_summary,
 )
 from apps.products.models import Color, ItemType, Product, ProductVariant, Size, Company
-from apps.products.serializers import ProductVariantDetailSerializer
+from apps.products.pagination import ProductPagination
+from apps.products.serializers import (
+    ProductVariantDetailSerializer,
+    ProductVariantListSerializer,
+)
 from apps.sales.utils import format_indian_amount
 from apps.vendors.models import (
     StockEntry,
@@ -203,6 +207,49 @@ class ScanExistingProductViewSet(viewsets.ViewSet):
 
         serializer = ProductVariantDetailSerializer(variant, context={"request": request})
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class VendorExistingProductsViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    Stock-entry Existing tab: products previously received from this vendor.
+    Search by product name (item type), brand (company), or barcode.
+    """
+
+    serializer_class = ProductVariantListSerializer
+    pagination_class = ProductPagination
+    permission_classes = [IsEmployeeWithFeature]
+    feature_access_key = "stock"
+    http_method_names = ["get"]
+
+    def get_queryset(self):
+        vendor_id = self.kwargs.get("id")
+        get_object_or_404(Vendor, id=vendor_id, is_active=True)
+
+        queryset = (
+            ProductVariant.objects.select_related(
+                "product",
+                "size",
+                "color",
+                "product__item_type",
+                "product__company",
+            )
+            .filter(is_active=True)
+            .filter(
+                Q(stock_entry__vendor_id=vendor_id)
+                | Q(stock_top_ups__stock_entry__vendor_id=vendor_id)
+            )
+            .distinct()
+            .order_by("-created_at")
+        )
+
+        search = (self.request.query_params.get("search") or "").strip()
+        if search:
+            queryset = queryset.filter(
+                Q(product__item_type__name__icontains=search)
+                | Q(product__company__name__icontains=search)
+                | Q(barcode_number__icontains=search)
+            )
+        return queryset
 
 
 class VendorStockCreateViewSet(viewsets.ModelViewSet):
