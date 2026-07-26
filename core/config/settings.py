@@ -12,6 +12,8 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 
 from pathlib import Path
 from datetime import timedelta
+from celery.schedules import crontab
+from corsheaders.defaults import default_headers
 import sys
 import dj_database_url
 import os 
@@ -95,6 +97,16 @@ MIDDLEWARE = [
 
 CORS_ALLOW_ALL_ORIGINS = os.getenv("CORS_ALLOW_ALL_ORIGINS", "False").lower() == "true"
 CORS_ALLOW_CREDENTIALS = os.getenv("CORS_ALLOW_CREDENTIALS", "True").lower() == "true"
+# Safari (esp. iOS 17+) preflights Cache-Control/Pragma; omit them and login
+# fails with Flutter web "ClientLoad failed".
+CORS_ALLOW_HEADERS = list(default_headers) + [
+    "cache-control",
+    "pragma",
+]
+
+# Railway terminates TLS; without this, build_absolute_uri() returns http://
+# media URLs and Flutter web blocks them as mixed content.
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
