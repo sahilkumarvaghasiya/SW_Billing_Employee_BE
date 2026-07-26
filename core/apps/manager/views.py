@@ -1013,9 +1013,11 @@ class ManagerVendorBillsBulkPayViewSet(viewsets.ViewSet):
                     )
                 open_entries.append(entry)
 
-            # Nearest due date first (null due dates last), then oldest.
+            # Minimum pending first; same pending → nearest due date.
             open_entries.sort(
                 key=lambda e: (
+                    (e.total_amount or Decimal("0.00"))
+                    - (e.paid_amount or Decimal("0.00")),
                     e.due_date is None,
                     e.due_date or timezone.localdate(),
                     e.created_at,

@@ -979,18 +979,17 @@ class VendorPayableBillDetailViewSet(viewsets.ModelViewSet):
 
 class VendorPayablePayViewSet(viewsets.ModelViewSet):
     """
-    Allocate across selected bills (nearest due date first):
+    Allocate across selected bills:
 
-    1) paid amount (cash) → clears bills
+    Sort: smallest pending first; if same pending, nearest due date
+    (null due last), then created_at, then id.
+
+    Example order: 1000/due14, 2000/due10, 3000/due5, 1000/due10
+    → clear 1000/due10, then 1000/due14, then 2000, then 3000.
+
+    1) paid amount (cash) → clears bills waterfall
     2) optional discount (−) → clears extra pending after cash
-    3) optional surcharge (+) → stored only, does NOT clear bills
-
-    Example discount: select 1000+2000, pay 2500, discount 200
-    → 1000 clear, 2000 gets 1500+200, pending 300.
-
-    Example surcharge: select 1000+2000, pay 2500, surcharge 200
-    → 1000 clear, 2000 gets 1500 cash; then +200 added on last bill total
-    → that bill pending 500+200 = 700. Surcharge also stored on payment (+).
+    3) optional surcharge (+) → added on last bill in that sort order
     """
 
     queryset = VendorPayment.objects.none()
@@ -1082,8 +1081,11 @@ class VendorPayablePayViewSet(viewsets.ModelViewSet):
                     }
                 )
 
+            # Minimum pending first; same pending → nearest due date.
             open_entries.sort(
                 key=lambda e: (
+                    (e.total_amount or Decimal("0.00"))
+                    - (e.paid_amount or Decimal("0.00")),
                     e.due_date is None,
                     e.due_date or timezone.localdate(),
                     e.created_at,
