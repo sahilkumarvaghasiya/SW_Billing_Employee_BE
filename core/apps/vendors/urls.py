@@ -9,6 +9,8 @@ from apps.vendors.views import (
     VendorPayablePayViewSet,
     VendorPayablePaymentDetailViewSet,
     VendorPayablePendingBillsViewSet,
+    VendorPayableReportPdfViewSet,
+    VendorPayableReportPreviewViewSet,
     VendorPayableStatementViewSet,
     VendorPayableSummaryViewSet,
     VendorPayableVendorsViewSet,
@@ -23,6 +25,14 @@ urlpatterns = [
     path("list/", VendorListViewSet.as_view({"get": "list"})),
     path("validate/", VendorValidationViewSet.as_view({"post": "create"})),
     path("payable/summary/", VendorPayableSummaryViewSet.as_view({"get": "list"})),
+    path(
+        "payable/reports/preview/",
+        VendorPayableReportPreviewViewSet.as_view({"get": "list"}),
+    ),
+    path(
+        "payable/reports/pdf/",
+        VendorPayableReportPdfViewSet.as_view({"get": "list"}),
+    ),
     path("payable/vendors/", VendorPayableVendorsViewSet.as_view({"get": "list"})),
     path(
         "payable/vendors/<int:id>/info/",

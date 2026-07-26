@@ -2,6 +2,7 @@ from datetime import datetime
 from decimal import Decimal
 from collections import OrderedDict
 
+from dateutil.relativedelta import relativedelta
 from django.db.models import Count, DecimalField, F, Prefetch, Sum
 from django.db.models.functions import Coalesce
 from django.utils import timezone
@@ -14,7 +15,7 @@ from apps.sales.utils import format_indian_amount
 from apps.vendors.models import StockEntry, StockEntryTopUp
 
 
-def parse_vendor_report_date_range(params):
+def parse_vendor_report_date_range(params, *, default_last_months=None):
     start_date_param = (params.get("start_date") or "").strip()
     end_date_param = (params.get("end_date") or "").strip()
 
@@ -42,12 +43,18 @@ def parse_vendor_report_date_range(params):
             {"date_range": ["start_date cannot be greater than end_date."]}
         )
 
+    if start_date is None and end_date is None and default_last_months:
+        end_date = timezone.localdate()
+        start_date = end_date - relativedelta(months=default_last_months)
+
     return start_date, end_date
 
 
-def vendor_report_entries(params):
+def vendor_report_entries(params, *, default_last_months=None):
     vendor_ids = parse_id_list(params, "vendor")
-    start_date, end_date = parse_vendor_report_date_range(params)
+    start_date, end_date = parse_vendor_report_date_range(
+        params, default_last_months=default_last_months
+    )
 
     queryset = (
         StockEntry.objects.select_related("vendor")

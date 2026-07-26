@@ -4,6 +4,7 @@ from decimal import Decimal
 from django.conf import settings
 from django.core.files.storage import default_storage
 from django.db import transaction, IntegrityError
+from django.http import HttpResponse
 from rest_framework.exceptions import ValidationError
 from django.db.models import (
     Case,
@@ -28,6 +29,12 @@ from rest_framework.response import Response
 from apps.accounts.permissions import IsEmployee, IsEmployeeWithFeature
 from apps.manager.permissions import IsManager, IsManagerOrEmployeeWithFeature
 from apps.manager.serializers import ManagerVendorBillSerializer
+from apps.manager.services.vendor_report_pdf import generate_vendor_report_pdf
+from apps.manager.vendor_report import (
+    vendor_report_entries,
+    vendor_report_payable_groups,
+    vendor_report_summary,
+)
 from apps.products.models import Color, ItemType, Product, ProductVariant, Size, Company
 from apps.products.serializers import ProductVariantDetailSerializer
 from apps.sales.utils import format_indian_amount
@@ -1246,3 +1253,77 @@ class VendorPayablePaymentDetailViewSet(viewsets.ModelViewSet):
         return VendorPayment.objects.select_related("vendor").prefetch_related(
             "allocations__stock_entry"
         )
+
+
+class VendorPayableReportPreviewViewSet(viewsets.ViewSet):
+    """
+    Employee all-vendor payable report preview.
+    Empty start/end → last 6 months through today.
+    """
+
+    permission_classes = [IsEmployeeWithFeature]
+    feature_access_key = "payable"
+    http_method_names = ["get"]
+
+    def list(self, request, *args, **kwargs):
+        entries, start_date, end_date, _vendor_ids = vendor_report_entries(
+            request.query_params, default_last_months=6
+        )
+        summary = vendor_report_summary(entries)
+        return Response(
+            {
+                "start_date": start_date.strftime("%d-%m-%Y") if start_date else None,
+                "end_date": end_date.strftime("%d-%m-%Y") if end_date else None,
+                **summary,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class VendorPayableReportPdfViewSet(viewsets.ViewSet):
+    """
+    Employee all-vendor payable report PDF.
+    Empty start/end → last 6 months through today.
+    """
+
+    permission_classes = [IsEmployeeWithFeature]
+    feature_access_key = "payable"
+    http_method_names = ["get"]
+
+    def list(self, request, *args, **kwargs):
+        entries, start_date, end_date, _vendor_ids = vendor_report_entries(
+            request.query_params, default_last_months=6
+        )
+        groups = vendor_report_payable_groups(entries)
+
+        if start_date and end_date:
+            period_label = (
+                f"{start_date.strftime('%d-%m-%Y')} – {end_date.strftime('%d-%m-%Y')}"
+            )
+        elif start_date:
+            period_label = f"From {start_date.strftime('%d-%m-%Y')}"
+        elif end_date:
+            period_label = f"Until {end_date.strftime('%d-%m-%Y')}"
+        else:
+            period_label = "Last 6 months"
+
+        shop = getattr(request.user, "shop", None)
+        business_name = (shop.name if shop else None) or "—"
+
+        pdf_bytes = generate_vendor_report_pdf(
+            title="Vendor Payable Report",
+            business_name=business_name,
+            period_label=period_label,
+            groups=groups,
+        )
+
+        filename = "vendor-payable-report.pdf"
+        if start_date and end_date:
+            filename = (
+                f"vendor-payable-report-{start_date.strftime('%Y%m%d')}-"
+                f"{end_date.strftime('%Y%m%d')}.pdf"
+            )
+
+        response = HttpResponse(pdf_bytes, content_type="application/pdf")
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return response
