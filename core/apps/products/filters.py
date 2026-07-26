@@ -24,7 +24,8 @@ class ProductVariantFilter(django_filters.FilterSet):
 
         return queryset.filter(
             Q(product__item_type__name__icontains=value) |
-            Q(product__company__name__icontains=value)
+            Q(product__company__name__icontains=value) |
+            Q(barcode_number__icontains=value)
         )
 
     def filter_gender(self, queryset, name, value):

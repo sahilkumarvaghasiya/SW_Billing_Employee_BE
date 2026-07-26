@@ -46,22 +46,26 @@ def build_invoice_context(bill, items):
     item_discount_total = Decimal("0.00")
 
     for item in items:
-        # Customer bill always shows item.price:
-        #   - no custom / discount%   → price = catalog price
-        #   - custom < catalog        → price = catalog price  (discount shown)
-        #   - custom > catalog        → price = custom amount  (no discount shown)
+        is_return = getattr(item, "is_return", False)
+        sign = Decimal("-1") if is_return else Decimal("1")
+
         original_rate = _d(item.price)
+        # total_price is stored signed (negative for returns).
         net_amount = _d(item.total_price)
-        gross_amount = (original_rate * item.quantity).quantize(
+        gross_amount = (original_rate * item.quantity * sign).quantize(
             Decimal("0.01"), rounding=ROUND_HALF_UP
         )
-        discount_amount = max(gross_amount - net_amount, Decimal("0.00"))
+        # Discounts don't apply to returns.
+        discount_amount = (
+            Decimal("0.00") if is_return else max(gross_amount - net_amount, Decimal("0.00"))
+        )
 
         gross_total += gross_amount
         item_discount_total += discount_amount
 
         line_items.append({
             "item": item,
+            "is_return": is_return,
             "original_rate": original_rate,
             "gross_amount": gross_amount,
             "discount_amount": discount_amount,
@@ -73,17 +77,26 @@ def build_invoice_context(bill, items):
     grand_total = _d(bill.total_amount)
     discount_percent = _d(bill.discount_percent)
 
-    if discount_percent > 0:
+    has_returns = any(line["is_return"] for line in line_items)
+
+    if discount_percent > 0 and subtotal > 0:
         bill_discount = min(
             (subtotal * discount_percent / Decimal("100")).quantize(
                 Decimal("0.01"), rounding=ROUND_HALF_UP
             ),
             subtotal,
         )
-    elif subtotal > grand_total:
+    elif not has_returns and subtotal > grand_total:
         bill_discount = subtotal - grand_total
     else:
         bill_discount = Decimal("0.00")
+
+    if grand_total > 0:
+        settlement_direction = "customer_to_shop"
+    elif grand_total < 0:
+        settlement_direction = "shop_to_customer"
+    else:
+        settlement_direction = "none"
 
     return {
         "line_items": line_items,
@@ -95,17 +108,24 @@ def build_invoice_context(bill, items):
         "bill_discount_percent": discount_percent,
         "has_bill_discount": bill_discount > Decimal("0.00"),
         "grand_total": grand_total,
+        "has_returns": has_returns,
+        "is_refund": grand_total <= 0,
+        "settlement_direction": settlement_direction,
+        "refund_amount": abs(grand_total),
     }
 
 
 def generate_bill_pdf(bill, items):
+    inv = build_invoice_context(bill, items)
+    template_name = "invoice_refund.html" if inv["is_refund"] else "invoice.html"
+
     html = render_to_string(
-        "invoice.html",
+        template_name,
         {
             "bill": bill,
             "items": items,
             "shop": _resolve_shop(bill),
-            "inv": build_invoice_context(bill, items),
+            "inv": inv,
         },
     )
 

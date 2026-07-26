@@ -81,8 +81,6 @@ TENANT_DOMAIN_SUFFIX = os.getenv("TENANT_DOMAIN_SUFFIX", "localhost").strip(".")
 
 
 MIDDLEWARE = [
-    # CorsMiddleware must be first, before anything (like TenantMainMiddleware)
-    # that can short-circuit and return a response without CORS headers.
     "corsheaders.middleware.CorsMiddleware",
     "django_tenants.middleware.main.TenantMainMiddleware",
     'django.middleware.security.SecurityMiddleware',
@@ -105,6 +103,13 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": (
         "rest_framework.permissions.IsAuthenticated",
     ),
+    # Emit datetimes in TIME_ZONE (Asia/Kolkata) as naive local wall-clock.
+    # Avoids UTC / +00:00 in API responses that clients display wrong.
+    "DATETIME_FORMAT": "%Y-%m-%dT%H:%M:%S",
+    "DATETIME_INPUT_FORMATS": [
+        "%Y-%m-%dT%H:%M:%S",
+        "iso-8601",
+    ],
 }
 
 ROOT_URLCONF = 'core.config.urls'

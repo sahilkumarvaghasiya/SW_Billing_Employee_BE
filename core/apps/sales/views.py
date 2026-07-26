@@ -10,7 +10,7 @@ from rest_framework import viewsets
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from apps.accounts.permissions import IsEmployee
+from apps.accounts.permissions import IsEmployee, IsEmployeeWithFeature
 from apps.manager.permissions import IsManager
 from apps.products.models import ProductVariant
 from apps.sales.notifications import (
@@ -39,7 +39,8 @@ from django.shortcuts import get_object_or_404
 
 class BarcodeProductLookupListView(viewsets.ReadOnlyModelViewSet):
     serializer_class = BarcodeLookupProductSerializer
-    permission_classes = [IsEmployee]
+    permission_classes = [IsEmployeeWithFeature]
+    feature_access_key = "billing"
     pagination_class = SalesBarcodeLookupPagination
 
     def get_queryset(self):
@@ -99,7 +100,8 @@ class BarcodeProductLookupListView(viewsets.ReadOnlyModelViewSet):
 
 class CustomerLookupByPhoneViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = CustomerLookupSerializer
-    permission_classes = [IsEmployee]
+    permission_classes = [IsEmployeeWithFeature]
+    feature_access_key = "billing"
     http_method_names = ["get"]
 
     def list(self, request, *args, **kwargs):
@@ -118,7 +120,8 @@ class CustomerLookupByPhoneViewSet(viewsets.ReadOnlyModelViewSet):
 
 class PaymentConfigQRListViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = PaymentConfigQRListSerializer
-    permission_classes = [IsEmployee]
+    permission_classes = [IsEmployeeWithFeature]
+    feature_access_key = "billing"
     http_method_names = ["get"]
 
     def get_queryset(self):
@@ -168,7 +171,8 @@ class TodaySummaryViewSet(viewsets.ReadOnlyModelViewSet):
 
 class SalesHistoryListViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = SalesHistoryListSerializer
-    permission_classes = [IsEmployee]
+    permission_classes = [IsEmployeeWithFeature]
+    feature_access_key = "sales"
     pagination_class = SalesHistoryPagination
     http_method_names = ["get"]
 
@@ -224,7 +228,8 @@ class SalesHistoryListViewSet(viewsets.ReadOnlyModelViewSet):
 
 class SalesHistoryDetailViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = SalesHistoryDetailSerializer
-    permission_classes = [IsEmployee]
+    permission_classes = [IsEmployeeWithFeature]
+    feature_access_key = "sales"
     http_method_names = ["get"]
 
     def get_queryset(self):
@@ -239,7 +244,8 @@ class SalesHistoryDetailViewSet(viewsets.ReadOnlyModelViewSet):
 
 class BillCreateViewSet(viewsets.ModelViewSet):
     serializer_class = BillCreateSerializer
-    permission_classes = [IsEmployee]
+    permission_classes = [IsEmployeeWithFeature]
+    feature_access_key = "billing"
     http_method_names = ["post"]
     queryset = ProductVariant.objects.none()
 
@@ -281,6 +287,7 @@ class BillCreateViewSet(viewsets.ModelViewSet):
             paid_amount=validated_data["computed_paid_amount"],
             payment_method=validated_data["payment_method"],
             payment_status=validated_data["payment_status"],
+            settlement_direction=validated_data["settlement_direction"],
             selected_payment_config=selected_payment_config,
             payment_config_name=selected_payment_config.name if selected_payment_config else None,
             payment_config_value=(
@@ -319,10 +326,13 @@ class BillCreateViewSet(viewsets.ModelViewSet):
             if not variant:
                 raise ValidationError(f"Variant not found: {item['variant'].pk}")
 
-            if variant.quantity < item["quantity"]:
-                raise ValidationError(f"Insufficient stock for variant {variant.id}")
+            if item.get("is_return"):
+                variant.quantity += item["quantity"]
+            else:
+                if variant.quantity < item["quantity"]:
+                    raise ValidationError(f"Insufficient stock for variant {variant.id}")
+                variant.quantity -= item["quantity"]
 
-            variant.quantity -= item["quantity"]
             variant.save(update_fields=["quantity", "updated_at"])
 
             handle_stock_level_notification(variant)
@@ -332,6 +342,7 @@ class BillCreateViewSet(viewsets.ModelViewSet):
                     bill=bill,
                     product_variant=variant,
                     quantity=item["quantity"],
+                    is_return=item.get("is_return", False),
                     original_price=item["original_price"],
                     price=item["price"],
                     discount_percent=item["discount_percent"],
@@ -359,6 +370,7 @@ class BillCreateViewSet(viewsets.ModelViewSet):
                     "custom_amount": str(bill.custom_amount),
                     "total_amount": str(bill.total_amount),
                     "paid_amount": str(bill.paid_amount),
+                    "settlement_direction": bill.settlement_direction,
                 },
                 "payment": {
                     "method": bill.payment_method,
@@ -376,6 +388,7 @@ class BillCreateViewSet(viewsets.ModelViewSet):
                         "id": item.id,
                         "product_variant_id": item.product_variant_id,
                         "quantity": item.quantity,
+                        "is_return": item.is_return,
                         "original_price": str(item.original_price),
                         "price": str(item.price),
                         "discount_percent": str(item.discount_percent),
@@ -391,11 +404,12 @@ class BillCreateViewSet(viewsets.ModelViewSet):
 
 
 class SendWhatsAppInvoiceView(APIView):
-    permission_classes = [IsEmployee]
+    permission_classes = [IsEmployeeWithFeature]
+    feature_access_key = "billing"
     http_method_names = ["post"]
 
     def post(self, request):
-        bill_id = request.data.get("bill_id")
+        bill_id = (request.data.get("bill_id") or "").strip()
         if not bill_id:
             raise ValidationError({"bill_id": ["This field is required."]})
 

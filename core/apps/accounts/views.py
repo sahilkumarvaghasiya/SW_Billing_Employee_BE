@@ -127,13 +127,18 @@ class UserDetailView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        from apps.accounts.feature_access import normalize_feature_access
+
         user = request.user
         return Response({
             "user_id": user.id,
             "user_name": user.username,
             "email": user.email,
             "shop_name": user.shop.name if user.shop else None,
-            "role": user.role
+            "role": user.role,
+            "feature_access": normalize_feature_access(
+                getattr(user, "feature_access", None)
+            ),
         })
 
 
