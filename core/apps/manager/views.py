@@ -47,7 +47,6 @@ from apps.manager.utils import (
     under_threshold_variants,
 )
 from apps.manager.vendor_report import (
-    vendor_report_bill_rows,
     vendor_report_entries,
     vendor_report_payable_groups,
     vendor_report_summary,
