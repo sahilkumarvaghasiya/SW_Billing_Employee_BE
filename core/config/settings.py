@@ -97,6 +97,10 @@ MIDDLEWARE = [
 CORS_ALLOW_ALL_ORIGINS = os.getenv("CORS_ALLOW_ALL_ORIGINS", "False").lower() == "true"
 CORS_ALLOW_CREDENTIALS = os.getenv("CORS_ALLOW_CREDENTIALS", "True").lower() == "true"
 
+# Railway terminates TLS; without this, build_absolute_uri() returns http://
+# media URLs and Flutter web blocks them as mixed content.
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "apps.accounts.authentication.SingleDeviceJWTAuthentication",
