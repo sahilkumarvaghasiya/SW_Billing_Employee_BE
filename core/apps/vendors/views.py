@@ -52,6 +52,7 @@ from apps.vendors.models import (
 from apps.vendors.paginations import (
     VendorListPagination,
     VendorPayablePendingBillsPagination,
+    VendorPayableStatementPagination,
     VendorPayableVendorsPagination,
     VendorStockHistoryPagination,
 )
@@ -1227,6 +1228,7 @@ class VendorPayableStatementViewSet(viewsets.ModelViewSet):
     permission_classes = [IsEmployeeWithFeature]
     feature_access_key = "payable"
     http_method_names = ["get"]
+    pagination_class = VendorPayableStatementPagination
 
     def list(self, request, *args, **kwargs):
         vendor = get_object_or_404(Vendor, id=kwargs.get("id"), is_active=True)
@@ -1284,6 +1286,10 @@ class VendorPayableStatementViewSet(viewsets.ModelViewSet):
             )
 
         results.sort(key=lambda row: row["sort_at"], reverse=True)
+
+        page = self.paginate_queryset(results)
+        if page is not None:
+            return self.get_paginated_response(page)
         return Response({"results": results}, status=status.HTTP_200_OK)
 
 
