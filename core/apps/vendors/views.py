@@ -274,7 +274,7 @@ class VendorStockCreateViewSet(viewsets.ModelViewSet):
             paid_amount=data["paid_amount"],
             due_date=data.get("paymentdeadlinedate"),
             notes=data.get("notes") or "",
-            gst = data.get("gst") or 0
+            gst=data.get("gst") or 0,
         )
 
         products = self._create_products(
@@ -287,6 +287,7 @@ class VendorStockCreateViewSet(viewsets.ModelViewSet):
                 "stock_entry_id": stock_entry.id,
                 "stk_number": stock_entry.stk_number,
                 "status": stock_entry.status,
+                "gst": str(stock_entry.gst),
                 "total_amount": str(stock_entry.total_amount),
                 "paid_amount": str(stock_entry.paid_amount),
                 "paymentdeadlinedate": str(stock_entry.due_date) if stock_entry.due_date else None,
@@ -433,7 +434,7 @@ class VendorExistingStockCreateViewSet(viewsets.ModelViewSet):
             paid_amount=data["paid_amount"],
             due_date=data.get("paymentdeadlinedate"),
             notes=data.get("notes") or "",
-            gst = data.get("gst") or 0
+            gst=data.get("gst") or 0,
         )
 
         products = self._create_products(
@@ -447,6 +448,7 @@ class VendorExistingStockCreateViewSet(viewsets.ModelViewSet):
                 "stock_entry_id": stock_entry.id,
                 "stk_number": stock_entry.stk_number,
                 "status": stock_entry.status,
+                "gst": str(stock_entry.gst),
                 "total_amount": str(stock_entry.total_amount),
                 "paid_amount": str(stock_entry.paid_amount),
                 "paymentdeadlinedate": str(stock_entry.due_date) if stock_entry.due_date else None,
@@ -779,6 +781,7 @@ class VendorStockHistoryDetailsViewset(viewsets.ReadOnlyModelViewSet):
             "stk_number": stock_entry.stk_number,
             "created_date": stock_entry.created_at.strftime("%d-%m-%Y"),
             "vendor_name": stock_entry.vendor.name,
+            "gst": str(stock_entry.gst),
             "total_amount": format_indian_amount(stock_entry.total_amount),
             "paid_amount": format_indian_amount(stock_entry.paid_amount),
             "pending_amount": format_indian_amount(

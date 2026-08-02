@@ -133,15 +133,22 @@ def vendor_report_payable_groups(entries):
         vendor = entry.vendor
         vendor_key = vendor.pk if vendor else 0
         vendor_name = ((vendor.name if vendor else "") or "Unknown").strip().upper()
+        vendor_gst_number = ((vendor.gst_number if vendor else "") or "").strip().upper()
+        vendor_label = vendor_name
+        if vendor_gst_number:
+            vendor_label = f"{vendor_name} | GST: {vendor_gst_number}"
 
         if vendor_key not in groups:
             groups[vendor_key] = {
                 "vendor_name": vendor_name,
+                "vendor_label": vendor_label,
                 "gst_number": (vendor.gst_number or "") if vendor else "",
                 "rows": [],
                 "_total_amount": Decimal("0.00"),
                 "_total_pending": Decimal("0.00"),
             }
+        else:
+            groups[vendor_key]["vendor_label"] = vendor_label
 
         total = entry.total_amount or Decimal("0.00")
         paid = entry.paid_amount or Decimal("0.00")
@@ -149,6 +156,9 @@ def vendor_report_payable_groups(entries):
         bill_date = timezone.localtime(entry.created_at).date()
         stk = (entry.stk_number or "").strip() or "—"
         gst = entry.gst or Decimal("0.00")
+        amount_display = format_indian_amount(total)
+        if gst:
+            amount_display = f"{amount_display} (GST: {gst:.2f}%)"
 
         groups[vendor_key]["rows"].append(
             {
@@ -156,6 +166,7 @@ def vendor_report_payable_groups(entries):
                 "description": f"Purchase#{stk}",
                 "due_date": _format_report_date(entry.due_date),
                 "amount": format_indian_amount(total),
+                "amount_display": amount_display,
                 "pending": format_indian_amount(pending),
                 "gst": f"{gst:.2f}%"
             }
@@ -168,6 +179,7 @@ def vendor_report_payable_groups(entries):
         result.append(
             {
                 "vendor_name": group["vendor_name"],
+                "vendor_label": group["vendor_label"],
                 "rows": group["rows"],
                 "gst_number": group["gst_number"],
                 "total_amount": format_indian_amount(group["_total_amount"]),
