@@ -30,6 +30,7 @@ from apps.accounts.permissions import IsEmployee, IsEmployeeWithFeature
 from apps.manager.permissions import IsManager, IsManagerOrEmployeeWithFeature
 from apps.manager.serializers import ManagerVendorBillSerializer
 from apps.manager.services.vendor_report_pdf import generate_vendor_report_pdf
+from apps.manager.services.vendor_statement_pdf import generate_vendor_statement_pdf
 from apps.manager.vendor_report import (
     vendor_report_entries,
     vendor_report_payable_groups,
@@ -1258,6 +1259,21 @@ class VendorPayableStatementViewSet(viewsets.ModelViewSet):
                 raise ValidationError(
                     {"end_date": ["Invalid date format. Use DD-MM-YYYY."]}
                 ) from exc
+
+        if params.get("export") == "pdf" or params.get("format") == "pdf":
+            shop = getattr(request.user, "shop", None)
+            business_name = (shop.name if shop else None) or "—"
+            pdf_bytes = generate_vendor_statement_pdf(
+                vendor=vendor,
+                business_name=business_name,
+                start_date=start_date,
+                end_date=end_date,
+            )
+            safe_name = vendor.name.lower().replace(" ", "-") if vendor.name else "vendor"
+            filename = f"statement-{safe_name}.pdf"
+            response = HttpResponse(pdf_bytes, content_type="application/pdf")
+            response["Content-Disposition"] = f'inline; filename="{filename}"'
+            return response
 
         bills_qs = _payable_bill_queryset().filter(vendor_id=vendor.id)
         payments_qs = (
