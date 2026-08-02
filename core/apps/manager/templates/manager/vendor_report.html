@@ -112,14 +112,14 @@
     <tbody>
       {% for group in groups %}
       <tr class="vendor-row">
-        <td colspan="5">{{ group.vendor_name }}</td>
+        <td colspan="5">{{ group.vendor_label|default:group.vendor_name }}</td>
       </tr>
       {% for row in group.rows %}
       <tr class="line-row">
         <td>{{ row.date }}</td>
         <td>{{ row.description }}</td>
         <td class="due">{{ row.due_date }}</td>
-        <td class="num">{{ row.amount }}</td>
+        <td class="num">{{ row.amount_display|default:row.amount }}</td>
         <td class="num">{{ row.pending }}</td>
       </tr>
       {% endfor %}

@@ -63,6 +63,7 @@ class StockEntry(models.Model):
         db_index=True
     )
     due_date = models.DateField(null=True, blank=True)
+    gst = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     notes = models.TextField(blank=True, null=True)
     is_fully_paid = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)

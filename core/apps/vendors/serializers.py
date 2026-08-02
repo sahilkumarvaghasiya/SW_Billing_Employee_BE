@@ -160,6 +160,14 @@ class VendorStockCreateSerializer(serializers.Serializer):
         allow_blank=True,
         allow_null=True,
     )
+    gst = serializers.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        min_value=0,
+        max_value=100,
+        required=False,
+        allow_null=True,
+    )
     total_amount = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=0)
     paid_amount = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=0)
     paymentdeadlinedate = serializers.DateField(required=False, allow_null=True)
@@ -191,6 +199,14 @@ class VendorStockCreateSerializer(serializers.Serializer):
 
 
 class VendorExistingStockCreateSerializer(serializers.Serializer):
+    gst = serializers.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        min_value=0,
+        max_value=100,
+        required=False,
+        allow_null=True,
+    )
     total_amount = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=0)
     paid_amount = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=0)
     paymentdeadlinedate = serializers.DateField(required=False, allow_null=True)
