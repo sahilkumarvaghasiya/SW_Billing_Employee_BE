@@ -79,11 +79,12 @@
   <table class="stmt">
     <thead>
       <tr>
-        <th style="width: 13%; text-align: left;">Date</th>
-        <th style="width: 42%; text-align: left;">Particulars</th>
-        <th class="r" style="width: 15%;">Debit (Rs.)</th>
-        <th class="r" style="width: 15%;">Credit (Rs.)</th>
-        <th class="r" style="width: 15%;">Pending (Rs.)</th>
+        <th style="width: 12%; text-align:left;">Date</th>
+        <th style="width: 42%; text-align:left;">Particulars</th>
+        <th class="r" style="width: 10%;">Adjustment (Rs.)</th>
+        <th class="r" style="width: 12%;">Debit (Rs.)</th>
+        <th class="r" style="width: 12%;">Credit (Rs.)</th>
+        <th class="r" style="width: 12%;">Pending (Rs.)</th>
       </tr>
     </thead>
     <tbody>
@@ -92,6 +93,7 @@
         <tr class="pr">
           <td>{{ row.date }}</td>
           <td>{{ row.particulars }}</td>
+          <td class="r">{{ row.adjustment }}</td>
           <td class="r">&nbsp;</td>
           <td class="r">{{ row.credit }}</td>
           <td class="r">{{ row.balance }}</td>
@@ -109,16 +111,18 @@
               </div>
               {% endif %}
           </td>
+          <td class="r">{{ row.adjustment }}</td>
           <td class="r">{{ row.debit }}</td>
           <td class="r">&nbsp;</td>
           <td class="r">{{ row.balance }}</td>
         </tr>
         {% endif %}
       {% empty %}
-      <tr><td colspan="5" style="text-align:center; padding: 20px; color: #64748b;">No purchases or payments recorded in this period.</td></tr>
+      <tr><td colspan="6" style="text-align:center; padding: 20px; color: #64748b;">No purchases or payments recorded in this period.</td></tr>
       {% endfor %}
       <tr class="cl">
         <td colspan="2">CLOSING BALANCE</td>
+        <td></td>
         <td class="r">Rs. {{ total_payment }}</td>
         <td class="r">Rs. {{ total_purchase }}</td>
         <td class="r">Rs. {{ closing_balance }}</td>
