@@ -137,6 +137,7 @@ def vendor_report_payable_groups(entries):
         if vendor_key not in groups:
             groups[vendor_key] = {
                 "vendor_name": vendor_name,
+                "gst_number": (vendor.gst_number or "") if vendor else "",
                 "rows": [],
                 "_total_amount": Decimal("0.00"),
                 "_total_pending": Decimal("0.00"),
@@ -147,6 +148,7 @@ def vendor_report_payable_groups(entries):
         pending = total - paid
         bill_date = timezone.localtime(entry.created_at).date()
         stk = (entry.stk_number or "").strip() or "—"
+        gst = entry.gst or Decimal("0.00")
 
         groups[vendor_key]["rows"].append(
             {
@@ -155,6 +157,7 @@ def vendor_report_payable_groups(entries):
                 "due_date": _format_report_date(entry.due_date),
                 "amount": format_indian_amount(total),
                 "pending": format_indian_amount(pending),
+                "gst": f"{gst:.2f}%"
             }
         )
         groups[vendor_key]["_total_amount"] += total
@@ -166,6 +169,7 @@ def vendor_report_payable_groups(entries):
             {
                 "vendor_name": group["vendor_name"],
                 "rows": group["rows"],
+                "gst_number": group["gst_number"],
                 "total_amount": format_indian_amount(group["_total_amount"]),
                 "total_pending": format_indian_amount(group["_total_pending"]),
             }

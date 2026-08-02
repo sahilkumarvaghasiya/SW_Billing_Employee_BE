@@ -274,6 +274,7 @@ class VendorStockCreateViewSet(viewsets.ModelViewSet):
             paid_amount=data["paid_amount"],
             due_date=data.get("paymentdeadlinedate"),
             notes=data.get("notes") or "",
+            gst = data.get("gst") or 0
         )
 
         products = self._create_products(
@@ -432,6 +433,7 @@ class VendorExistingStockCreateViewSet(viewsets.ModelViewSet):
             paid_amount=data["paid_amount"],
             due_date=data.get("paymentdeadlinedate"),
             notes=data.get("notes") or "",
+            gst = data.get("gst") or 0
         )
 
         products = self._create_products(
@@ -677,6 +679,7 @@ class VendorStockHistoryListViewset(viewsets.ReadOnlyModelViewSet):
                 "total_amount": format_indian_amount(entry.total_amount),
                 "paid_amount": format_indian_amount(entry.paid_amount),
                 "pending_amount": format_indian_amount(max(entry.total_amount - entry.paid_amount, 0)),
+                "gst": f"{entry.gst:.2f}%",
                 "status": entry.status,
             }
             for entry in entries
