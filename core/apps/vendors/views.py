@@ -52,6 +52,7 @@ from apps.vendors.models import (
 from apps.vendors.paginations import (
     VendorListPagination,
     VendorPayablePendingBillsPagination,
+    VendorPayableStatementPagination,
     VendorPayableVendorsPagination,
     VendorStockHistoryPagination,
 )
@@ -273,6 +274,7 @@ class VendorStockCreateViewSet(viewsets.ModelViewSet):
             paid_amount=data["paid_amount"],
             due_date=data.get("paymentdeadlinedate"),
             notes=data.get("notes") or "",
+            gst=data.get("gst") or 0,
         )
 
         products = self._create_products(
@@ -285,6 +287,7 @@ class VendorStockCreateViewSet(viewsets.ModelViewSet):
                 "stock_entry_id": stock_entry.id,
                 "stk_number": stock_entry.stk_number,
                 "status": stock_entry.status,
+                "gst": str(stock_entry.gst),
                 "total_amount": str(stock_entry.total_amount),
                 "paid_amount": str(stock_entry.paid_amount),
                 "paymentdeadlinedate": str(stock_entry.due_date) if stock_entry.due_date else None,
@@ -431,6 +434,7 @@ class VendorExistingStockCreateViewSet(viewsets.ModelViewSet):
             paid_amount=data["paid_amount"],
             due_date=data.get("paymentdeadlinedate"),
             notes=data.get("notes") or "",
+            gst=data.get("gst") or 0,
         )
 
         products = self._create_products(
@@ -444,6 +448,7 @@ class VendorExistingStockCreateViewSet(viewsets.ModelViewSet):
                 "stock_entry_id": stock_entry.id,
                 "stk_number": stock_entry.stk_number,
                 "status": stock_entry.status,
+                "gst": str(stock_entry.gst),
                 "total_amount": str(stock_entry.total_amount),
                 "paid_amount": str(stock_entry.paid_amount),
                 "paymentdeadlinedate": str(stock_entry.due_date) if stock_entry.due_date else None,
@@ -676,6 +681,7 @@ class VendorStockHistoryListViewset(viewsets.ReadOnlyModelViewSet):
                 "total_amount": format_indian_amount(entry.total_amount),
                 "paid_amount": format_indian_amount(entry.paid_amount),
                 "pending_amount": format_indian_amount(max(entry.total_amount - entry.paid_amount, 0)),
+                "gst": f"{entry.gst:.2f}%",
                 "status": entry.status,
             }
             for entry in entries
@@ -775,6 +781,7 @@ class VendorStockHistoryDetailsViewset(viewsets.ReadOnlyModelViewSet):
             "stk_number": stock_entry.stk_number,
             "created_date": stock_entry.created_at.strftime("%d-%m-%Y"),
             "vendor_name": stock_entry.vendor.name,
+            "gst": str(stock_entry.gst),
             "total_amount": format_indian_amount(stock_entry.total_amount),
             "paid_amount": format_indian_amount(stock_entry.paid_amount),
             "pending_amount": format_indian_amount(
@@ -1227,6 +1234,7 @@ class VendorPayableStatementViewSet(viewsets.ModelViewSet):
     permission_classes = [IsEmployeeWithFeature]
     feature_access_key = "payable"
     http_method_names = ["get"]
+    pagination_class = VendorPayableStatementPagination
 
     def list(self, request, *args, **kwargs):
         vendor = get_object_or_404(Vendor, id=kwargs.get("id"), is_active=True)
@@ -1284,6 +1292,10 @@ class VendorPayableStatementViewSet(viewsets.ModelViewSet):
             )
 
         results.sort(key=lambda row: row["sort_at"], reverse=True)
+
+        page = self.paginate_queryset(results)
+        if page is not None:
+            return self.get_paginated_response(page)
         return Response({"results": results}, status=status.HTTP_200_OK)
 
 
