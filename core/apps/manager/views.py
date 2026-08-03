@@ -18,7 +18,6 @@ from apps.manager.pagination import (
 )
 from apps.manager.permissions import (
     IsManager,
-    IsManagerOrEmployee,
     IsManagerOrEmployeeWithFeature,
 )
 from apps.manager.serializers import (
@@ -55,7 +54,11 @@ from apps.accounts.models import User
 from apps.products.models import Company, ItemType, Product, ProductVariant
 from apps.sales.models import Bill, BillItem, PaymentConfig
 from apps.sales.utils import format_indian_amount
-from apps.vendors.models import StockEntry, StockEntryTopUp
+from apps.vendors.models import (
+    StockEntry,
+    StockEntryTopUp,
+    stock_entry_pending_expression,
+)
 
 
 class ManagerOverviewViewSet(viewsets.ReadOnlyModelViewSet):
@@ -778,7 +781,7 @@ class ManagerVendorSummaryViewSet(viewsets.ViewSet):
         total_pending = pending.aggregate(
             amount=Coalesce(
                 Sum(
-                    F("total_amount") - Coalesce(F("paid_amount"), Decimal("0.00")),
+                    stock_entry_pending_expression(),
                     output_field=DecimalField(max_digits=14, decimal_places=2),
                 ),
                 Decimal("0.00"),
@@ -1015,8 +1018,7 @@ class ManagerVendorBillsBulkPayViewSet(viewsets.ViewSet):
             # Minimum pending first; same pending → nearest due date.
             open_entries.sort(
                 key=lambda e: (
-                    (e.total_amount or Decimal("0.00"))
-                    - (e.paid_amount or Decimal("0.00")),
+                    e.pending_amount,
                     e.due_date is None,
                     e.due_date or timezone.localdate(),
                     e.created_at,
@@ -1026,9 +1028,7 @@ class ManagerVendorBillsBulkPayViewSet(viewsets.ViewSet):
 
             total_pending = Decimal("0.00")
             for entry in open_entries:
-                pending = (entry.total_amount or Decimal("0.00")) - (
-                    entry.paid_amount or Decimal("0.00")
-                )
+                pending = entry.pending_amount
                 if pending <= 0:
                     raise ValidationError(
                         {
@@ -1057,10 +1057,7 @@ class ManagerVendorBillsBulkPayViewSet(viewsets.ViewSet):
                 if remaining <= 0:
                     break
 
-                pending = (entry.total_amount or Decimal("0.00")) - (
-                    entry.paid_amount or Decimal("0.00")
-                )
-                applied = min(remaining, pending)
+                applied = min(remaining, entry.pending_amount)
                 if applied <= 0:
                     continue
 

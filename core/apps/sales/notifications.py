@@ -228,7 +228,7 @@ def create_vendor_payment_due_notification(stock_entry):
         if stock_entry.due_date
         else "N/A"
     )
-    due_amount = stock_entry.total_amount - stock_entry.paid_amount
+    due_amount = stock_entry.pending_amount
     Notification.objects.create(
         type=Notification.Type.VENDOR_PAYMENT_DUE,
         title="Vendor payment deadline",

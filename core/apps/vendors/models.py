@@ -1,9 +1,29 @@
+from decimal import Decimal
+
 from django.db import models
 from datetime import timedelta
+from django.db.models import DecimalField, ExpressionWrapper, F
+from django.db.models.functions import Coalesce
 from django.utils import timezone
 import uuid
 
 from apps.shops.utils import get_current_tenant_id
+
+
+def stock_entry_pending_expression(prefix=""):
+    """ORM version of StockEntry.pending_amount.
+
+    `prefix` lets related lookups reuse it, e.g. "stock_entries__" from Vendor.
+    Keep this in sync with the property; every payable total is built on it.
+    """
+    zero = Decimal("0.00")
+    return ExpressionWrapper(
+        F(f"{prefix}total_amount")
+        + Coalesce(F(f"{prefix}surcharge_amount"), zero)
+        - Coalesce(F(f"{prefix}paid_amount"), zero)
+        - Coalesce(F(f"{prefix}discount_amount"), zero),
+        output_field=DecimalField(max_digits=14, decimal_places=2),
+    )
 
 
 class Vendor(models.Model):
@@ -56,6 +76,8 @@ class StockEntry(models.Model):
     stk_number = models.CharField(max_length=100, unique=True, db_index=True)
     total_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     paid_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0, blank=True, null=True)
+    discount_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    surcharge_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     status = models.CharField(
         max_length=10,
         choices=StatusChoices.choices,
@@ -83,11 +105,28 @@ class StockEntry(models.Model):
         tenant_id = get_current_tenant_id() or "0"
         return f"STK-{tenant_id}-{date_str}-{uuid.uuid4().hex[:6].upper()}"
 
+    @property
+    def gross_amount(self):
+        """Purchase price plus any surcharge charged at payment time."""
+        return (self.total_amount or 0) + (self.surcharge_amount or 0)
+
+    @property
+    def settled_amount(self):
+        """Everything that has cleared the bill: cash plus discount given."""
+        return (self.paid_amount or 0) + (self.discount_amount or 0)
+
+    @property
+    def pending_amount(self):
+        return max(self.gross_amount - self.settled_amount, 0)
+
     def clean(self):
         if self.total_amount < 0 or self.paid_amount < 0:
             raise ValueError("Amounts cannot be negative")
 
-        if self.paid_amount > self.total_amount:
+        if (self.discount_amount or 0) < 0 or (self.surcharge_amount or 0) < 0:
+            raise ValueError("Amounts cannot be negative")
+
+        if self.settled_amount > self.gross_amount:
             raise ValueError("Paid amount cannot exceed total amount")
 
     def save(self, *args, **kwargs):
@@ -96,8 +135,8 @@ class StockEntry(models.Model):
 
         self.full_clean()
 
-        paid = self.paid_amount or 0
-        total = self.total_amount or 0
+        paid = self.settled_amount
+        total = self.gross_amount
 
         if paid >= total and total > 0:
             self.status = self.StatusChoices.PAID
@@ -231,7 +270,7 @@ class VendorPayment(models.Model):
 
 
 class VendorPaymentAllocation(models.Model):
-    """How much of a VendorPayment was applied to one stock entry bill."""
+    """How much cash of a VendorPayment was applied to one stock entry bill."""
 
     payment = models.ForeignKey(
         VendorPayment,

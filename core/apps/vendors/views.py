@@ -4,13 +4,13 @@ from decimal import Decimal
 from django.conf import settings
 from django.core.files.storage import default_storage
 from django.db import transaction, IntegrityError
+from django.db.models import Q
 from django.http import HttpResponse
 from rest_framework.exceptions import ValidationError
 from django.db.models import (
     Case,
     Count,
     DecimalField,
-    ExpressionWrapper,
     F,
     IntegerField,
     Min,
@@ -37,6 +37,7 @@ from apps.manager.vendor_report import (
     vendor_report_summary,
 )
 from apps.products.models import Color, ItemType, Product, ProductVariant, Size, Company
+from apps.vendors.models import StockEntry, Vendor
 from apps.products.pagination import ProductPagination
 from apps.products.serializers import (
     ProductVariantDetailSerializer,
@@ -49,6 +50,7 @@ from apps.vendors.models import (
     Vendor,
     VendorPayment,
     VendorPaymentAllocation,
+    stock_entry_pending_expression,
 )
 from apps.vendors.paginations import (
     VendorListPagination,
@@ -74,6 +76,19 @@ from apps.vendors.utils import (
     normalize_gender,
     relative_media_path,
 )
+
+def _parse_report_date(raw_value, field_name):
+    """Parse an optional DD-MM-YYYY query param into a date."""
+    value = (raw_value or "").strip()
+    if not value:
+        return None
+    try:
+        return datetime.strptime(value, "%d-%m-%Y").date()
+    except ValueError as exc:
+        raise ValidationError(
+            {field_name: ["Invalid date format. Use DD-MM-YYYY."]}
+        ) from exc
+
 
 def resolve_name_or_id(model_class, raw_value, field_name="field"):
     """
@@ -681,7 +696,7 @@ class VendorStockHistoryListViewset(viewsets.ReadOnlyModelViewSet):
                 "created_date": entry.created_at.strftime("%d-%m-%Y"),
                 "total_amount": format_indian_amount(entry.total_amount),
                 "paid_amount": format_indian_amount(entry.paid_amount),
-                "pending_amount": format_indian_amount(max(entry.total_amount - entry.paid_amount, 0)),
+                "pending_amount": format_indian_amount(entry.pending_amount),
                 "gst": f"{entry.gst:.2f}%",
                 "status": entry.status,
             }
@@ -785,9 +800,7 @@ class VendorStockHistoryDetailsViewset(viewsets.ReadOnlyModelViewSet):
             "gst": str(stock_entry.gst),
             "total_amount": format_indian_amount(stock_entry.total_amount),
             "paid_amount": format_indian_amount(stock_entry.paid_amount),
-            "pending_amount": format_indian_amount(
-                max(stock_entry.total_amount - stock_entry.paid_amount, 0)
-            ),
+            "pending_amount": format_indian_amount(stock_entry.pending_amount),
             "payment_deadline": stock_entry.due_date.strftime("%d-%m-%Y") if stock_entry.due_date else None,
             "status": stock_entry.status,
             "products": list(products.values()),
@@ -817,7 +830,7 @@ class VendorPayableSummaryViewSet(viewsets.ModelViewSet):
         total_pending = pending.aggregate(
             amount=Coalesce(
                 Sum(
-                    F("total_amount") - Coalesce(F("paid_amount"), Decimal("0.00")),
+                    stock_entry_pending_expression(),
                     output_field=DecimalField(max_digits=14, decimal_places=2),
                 ),
                 Decimal("0.00"),
@@ -865,11 +878,7 @@ class VendorPayableVendorsViewSet(viewsets.ModelViewSet):
             stock_entries__due_date__isnull=False,
             stock_entries__due_date__lt=today,
         )
-        pending_amount = ExpressionWrapper(
-            F("stock_entries__total_amount")
-            - Coalesce(F("stock_entries__paid_amount"), Value(Decimal("0.00"))),
-            output_field=DecimalField(max_digits=14, decimal_places=2),
-        )
+        pending_amount = stock_entry_pending_expression("stock_entries__")
 
         queryset = (
             Vendor.objects.filter(is_active=True)
@@ -920,11 +929,7 @@ class VendorPayableVendorsViewSet(viewsets.ModelViewSet):
 def _payable_pending_amount_annotation():
     return Coalesce(
         Sum(
-            ExpressionWrapper(
-                F("stock_entries__total_amount")
-                - Coalesce(F("stock_entries__paid_amount"), Value(Decimal("0.00"))),
-                output_field=DecimalField(max_digits=14, decimal_places=2),
-            ),
+            stock_entry_pending_expression("stock_entries__"),
             filter=Q(stock_entries__is_fully_paid=False),
         ),
         Value(Decimal("0.00")),
@@ -1051,7 +1056,7 @@ class VendorPayablePayViewSet(viewsets.ModelViewSet):
 
     1) paid amount (cash) → clears bills waterfall
     2) optional discount (−) → clears extra pending after cash
-    3) optional surcharge (+) → added on last bill in that sort order
+    3) optional surcharge (+) → added on the first bill the cash left open
     """
 
     queryset = VendorPayment.objects.none()
@@ -1101,9 +1106,7 @@ class VendorPayablePayViewSet(viewsets.ModelViewSet):
                             ]
                         }
                     )
-                pending = (entry.total_amount or Decimal("0.00")) - (
-                    entry.paid_amount or Decimal("0.00")
-                )
+                pending = entry.pending_amount
                 if pending <= 0:
                     raise ValidationError(
                         {
@@ -1146,8 +1149,7 @@ class VendorPayablePayViewSet(viewsets.ModelViewSet):
             # Minimum pending first; same pending → nearest due date.
             open_entries.sort(
                 key=lambda e: (
-                    (e.total_amount or Decimal("0.00"))
-                    - (e.paid_amount or Decimal("0.00")),
+                    e.pending_amount,
                     e.due_date is None,
                     e.due_date or timezone.localdate(),
                     e.created_at,
@@ -1166,37 +1168,51 @@ class VendorPayablePayViewSet(viewsets.ModelViewSet):
             allocation_totals = {entry.id: Decimal("0.00") for entry in open_entries}
             updated_ids = set()
 
-            def _apply_chunk(budget):
+            def _apply_chunk(budget, field):
+                """Waterfall `budget` across open bills into `field`.
+
+                `field` is either paid_amount (cash, tracked as allocations) or
+                discount_amount (write-off, not a real receipt). Neither touches
+                total_amount, which stays the actual purchase price.
+                """
                 remaining = budget
                 if remaining <= 0:
                     return
                 for entry in open_entries:
                     if remaining <= 0:
                         break
-                    pending = (entry.total_amount or Decimal("0.00")) - (
-                        entry.paid_amount or Decimal("0.00")
-                    )
-                    applied = min(remaining, pending)
+                    applied = min(remaining, entry.pending_amount)
                     if applied <= 0:
                         continue
-                    entry.paid_amount = (entry.paid_amount or Decimal("0.00")) + applied
+                    setattr(
+                        entry,
+                        field,
+                        (getattr(entry, field) or Decimal("0.00")) + applied,
+                    )
                     entry.save()
-                    allocation_totals[entry.id] += applied
+                    if field == "paid_amount":
+                        allocation_totals[entry.id] += applied
                     updated_ids.add(entry.id)
                     remaining -= applied
 
-            # Cash + discount clear bills (−).
-            _apply_chunk(amount)
-            _apply_chunk(discount)
+            # Cash first, then discount clears whatever pending is left (−).
+            _apply_chunk(amount, "paid_amount")
+            _apply_chunk(discount, "discount_amount")
 
-            # Surcharge (+): increase last selected bill's total (adds pending).
+            # Surcharge (+): lands on the bill where the cash ran out, i.e. the
+            # first one still open in waterfall order. If the cash cleared every
+            # selected bill it reopens the last one. Recorded separately so the
+            # purchase price itself is never rewritten.
             if surcharge > 0 and open_entries:
-                last_bill = open_entries[-1]
-                last_bill.total_amount = (
-                    last_bill.total_amount or Decimal("0.00")
+                target = next(
+                    (entry for entry in open_entries if entry.pending_amount > 0),
+                    open_entries[-1],
+                )
+                target.surcharge_amount = (
+                    target.surcharge_amount or Decimal("0.00")
                 ) + surcharge
-                last_bill.save()
-                updated_ids.add(last_bill.id)
+                target.save()
+                updated_ids.add(target.id)
 
             for entry in open_entries:
                 applied = allocation_totals.get(entry.id) or Decimal("0.00")
@@ -1243,37 +1259,11 @@ class VendorPayableStatementViewSet(viewsets.ModelViewSet):
         start_date_param = (params.get("start_date") or "").strip()
         end_date_param = (params.get("end_date") or "").strip()
 
-        start_date = None
-        end_date = None
-        if start_date_param:
-            try:
-                start_date = datetime.strptime(start_date_param, "%d-%m-%Y").date()
-            except ValueError as exc:
-                raise ValidationError(
-                    {"start_date": ["Invalid date format. Use DD-MM-YYYY."]}
-                ) from exc
-        if end_date_param:
-            try:
-                end_date = datetime.strptime(end_date_param, "%d-%m-%Y").date()
-            except ValueError as exc:
-                raise ValidationError(
-                    {"end_date": ["Invalid date format. Use DD-MM-YYYY."]}
-                ) from exc
+        start_date = _parse_report_date(start_date_param, "start_date")
+        end_date = _parse_report_date(end_date_param, "end_date")
 
-        if params.get("export") == "pdf" or params.get("format") == "pdf":
-            shop = getattr(request.user, "shop", None)
-            business_name = (shop.name if shop else None) or "—"
-            pdf_bytes = generate_vendor_statement_pdf(
-                vendor=vendor,
-                business_name=business_name,
-                start_date=start_date,
-                end_date=end_date,
-            )
-            safe_name = vendor.name.lower().replace(" ", "-") if vendor.name else "vendor"
-            filename = f"statement-{safe_name}.pdf"
-            response = HttpResponse(pdf_bytes, content_type="application/pdf")
-            response["Content-Disposition"] = f'inline; filename="{filename}"'
-            return response
+        if (params.get("export") or "").strip().lower() == "pdf":
+            return self._pdf_response(request, vendor, start_date, end_date)
 
         bills_qs = _payable_bill_queryset().filter(vendor_id=vendor.id)
         payments_qs = (
@@ -1313,6 +1303,30 @@ class VendorPayableStatementViewSet(viewsets.ModelViewSet):
         if page is not None:
             return self.get_paginated_response(page)
         return Response({"results": results}, status=status.HTTP_200_OK)
+
+    def _pdf_response(self, request, vendor, start_date, end_date):
+        """Same statement, rendered as the downloadable PDF (?export=pdf)."""
+        shop = getattr(request.user, "shop", None)
+        business_name = (shop.name if shop else None) or "—"
+
+        pdf_bytes = generate_vendor_statement_pdf(
+            vendor=vendor,
+            business_name=business_name,
+            start_date=start_date,
+            end_date=end_date,
+        )
+
+        slug = (vendor.name or "vendor").strip().lower().replace(" ", "-")
+        filename = f"vendor-statement-{slug}.pdf"
+        if start_date and end_date:
+            filename = (
+                f"vendor-statement-{slug}-{start_date.strftime('%Y%m%d')}-"
+                f"{end_date.strftime('%Y%m%d')}.pdf"
+            )
+
+        response = HttpResponse(pdf_bytes, content_type="application/pdf")
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return response
 
 
 class VendorPayablePaymentDetailViewSet(viewsets.ModelViewSet):

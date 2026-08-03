@@ -505,6 +505,8 @@ class ManagerVendorBillSerializer(serializers.ModelSerializer):
     due_date = serializers.SerializerMethodField()
     total = serializers.SerializerMethodField()
     paid = serializers.SerializerMethodField()
+    discount = serializers.SerializerMethodField()
+    surcharge = serializers.SerializerMethodField()
     pending = serializers.SerializerMethodField()
     status = serializers.CharField(source="get_status_display")
     due = serializers.SerializerMethodField()
@@ -521,6 +523,8 @@ class ManagerVendorBillSerializer(serializers.ModelSerializer):
             "bill_date",
             "total",
             "paid",
+            "discount",
+            "surcharge",
             "pending",
             "status",
             "stock_lines",
@@ -543,11 +547,14 @@ class ManagerVendorBillSerializer(serializers.ModelSerializer):
     def get_paid(self, obj):
         return format_indian_amount(obj.paid_amount or Decimal("0.00"))
 
+    def get_discount(self, obj):
+        return format_indian_amount(obj.discount_amount or Decimal("0.00"))
+
+    def get_surcharge(self, obj):
+        return format_indian_amount(obj.surcharge_amount or Decimal("0.00"))
+
     def get_pending(self, obj):
-        pending = (obj.total_amount or Decimal("0.00")) - (
-            obj.paid_amount or Decimal("0.00")
-        )
-        return format_indian_amount(pending)
+        return format_indian_amount(obj.pending_amount)
 
     def get_due(self, obj):
         if obj.is_fully_paid or obj.status == StockEntry.StatusChoices.PAID:
@@ -620,9 +627,7 @@ class ManagerVendorBillPaymentSerializer(serializers.Serializer):
                 {"detail": "This bill is already fully paid."}
             )
 
-        total = entry.total_amount or Decimal("0.00")
-        paid = entry.paid_amount or Decimal("0.00")
-        pending = total - paid
+        pending = entry.pending_amount
 
         if amount > pending:
             raise serializers.ValidationError(

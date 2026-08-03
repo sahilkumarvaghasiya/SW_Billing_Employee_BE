@@ -12,7 +12,11 @@ from apps.manager.serializers import ManagerVendorReportBillSerializer
 from apps.manager.utils import parse_id_list
 from apps.products.models import ProductVariant
 from apps.sales.utils import format_indian_amount
-from apps.vendors.models import StockEntry, StockEntryTopUp
+from apps.vendors.models import (
+    StockEntry,
+    StockEntryTopUp,
+    stock_entry_pending_expression,
+)
 
 
 def parse_vendor_report_date_range(params, *, default_last_months=None):
@@ -100,11 +104,16 @@ def vendor_report_summary(entries):
             Decimal("0.00"),
             output_field=DecimalField(max_digits=14, decimal_places=2),
         ),
+        total_pending=Coalesce(
+            Sum(stock_entry_pending_expression()),
+            Decimal("0.00"),
+            output_field=DecimalField(max_digits=14, decimal_places=2),
+        ),
     )
 
     total_billed = agg["total_billed"]
     total_paid = agg["total_paid"]
-    total_pending = total_billed - total_paid
+    total_pending = agg["total_pending"]
 
     return {
         "bills": agg["bills"],
@@ -151,8 +160,7 @@ def vendor_report_payable_groups(entries):
             groups[vendor_key]["vendor_label"] = vendor_label
 
         total = entry.total_amount or Decimal("0.00")
-        paid = entry.paid_amount or Decimal("0.00")
-        pending = total - paid
+        pending = entry.pending_amount
         bill_date = timezone.localtime(entry.created_at).date()
         stk = (entry.stk_number or "").strip() or "—"
         gst = entry.gst or Decimal("0.00")

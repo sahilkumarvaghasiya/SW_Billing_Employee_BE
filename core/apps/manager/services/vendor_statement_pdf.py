@@ -6,8 +6,10 @@ from django.template.loader import render_to_string
 from django.utils import timezone
 from xhtml2pdf import pisa
 
+from django.db.models import Sum
+from apps.manager.utils import format_adjustment_amount
 from apps.sales.utils import format_indian_amount
-from apps.vendors.models import StockEntry, VendorPayment
+from apps.vendors.models import StockEntry, VendorPayment, VendorPaymentAllocation
 
 
 def generate_vendor_statement_pdf(
@@ -20,11 +22,8 @@ def generate_vendor_statement_pdf(
     """
     Generates a bank-statement style PDF for a vendor's purchases & payments.
     """
-    # 1. Query transactions within specified date range
     bills_qs = StockEntry.objects.filter(vendor_id=vendor.id)
-    payments_qs = VendorPayment.objects.filter(vendor_id=vendor.id).prefetch_related(
-        "allocations__stock_entry"
-    )
+    payments_qs = VendorPayment.objects.filter(vendor_id=vendor.id).prefetch_related("allocations__stock_entry")
 
     if start_date:
         bills_qs = bills_qs.filter(created_at__date__gte=start_date)
@@ -33,46 +32,62 @@ def generate_vendor_statement_pdf(
         bills_qs = bills_qs.filter(created_at__date__lte=end_date)
         payments_qs = payments_qs.filter(payment_date__lte=end_date)
 
+    allocated_by_bill = {
+        row["stock_entry_id"]: row["applied"] for row in VendorPaymentAllocation.objects.filter(stock_entry__vendor_id=vendor.id).values("stock_entry_id").annotate(applied=Sum("applied_amount"))
+    }
+
     items = []
     for bill in bills_qs:
         dt = timezone.localtime(bill.created_at)
-        items.append({
-            "kind": "purchase",
-            "sort_at": dt,
-            "date": dt.strftime("%d %b %Y"),
-            "particulars": f"Purchase #{bill.stk_number}",
-            "amount": bill.total_amount or Decimal("0.00"),
-        })
+        items.append(
+            {
+                "kind": "purchase",
+                "sort_at": dt,
+                "date": dt.strftime("%d %b %Y"),
+                "particulars": f"Purchase #{bill.stk_number}",
+                "amount": bill.total_amount or Decimal("0.00"),
+                "adjustment": Decimal("0.00"),
+            }
+        )
+
+        opening_paid = (bill.paid_amount or Decimal("0.00")) - allocated_by_bill.get(bill.id, Decimal("0.00"))
+        if opening_paid > 0:
+            items.append(
+                {
+                    "kind": "payment",
+                    "sort_at": dt,
+                    "date": dt.strftime("%d %b %Y"),
+                    "particulars": f"Paid at purchase #{bill.stk_number}",
+                    "stk_ref_lines": [],
+                    "amount": opening_paid,
+                    "adjustment": Decimal("0.00"),
+                }
+            )
 
     for payment in payments_qs:
         if payment.created_at:
             sort_dt = timezone.localtime(payment.created_at)
         else:
-            sort_dt = timezone.make_aware(
-                datetime.combine(payment.payment_date, datetime.min.time())
-            )
+            sort_dt = timezone.make_aware(datetime.combine(payment.payment_date, datetime.min.time()))
 
         # Collect bill references
-        stk_refs = [
-            alloc.stock_entry.stk_number if alloc.stock_entry else "N/A"
-            for alloc in payment.allocations.all()
-        ]
+        stk_refs = [alloc.stock_entry.stk_number if alloc.stock_entry else "N/A" for alloc in payment.allocations.all()]
 
-        # Maximum 3 references per line
-        stk_ref_lines = [
-            ", ".join(stk_refs[i:i + 3])
-            for i in range(0, len(stk_refs), 3)
-        ]
+        # One reference per line
+        stk_ref_lines = list(stk_refs)
 
-        items.append({
-            "kind": "payment",
-            "sort_at": sort_dt,
-            "date": payment.payment_date.strftime("%d %b %Y"),
-            "particulars": "Payment Paid",
-            "stk_ref_lines": stk_ref_lines,
-            "amount": payment.amount or Decimal("0.00"),
-        })
-
+        items.append(
+            {
+                "kind": "payment",
+                "sort_at": sort_dt,
+                "date": payment.payment_date.strftime("%d %b %Y"),
+                "particulars": "Payment Paid",
+                "stk_ref_lines": stk_ref_lines,
+                "amount": payment.amount or Decimal("0.00"),
+                # Surcharge adds to what we owe, discount writes part of it off.
+                "adjustment": (payment.surcharge or Decimal("0.00")) - (payment.discount or Decimal("0.00")),
+            }
+        )
 
     # Sort chronologically ascending (oldest first)
     items.sort(key=lambda x: x["sort_at"])
@@ -83,36 +98,45 @@ def generate_vendor_statement_pdf(
     running_balance = Decimal("0.00")
     total_purchase_val = Decimal("0.00")
     total_payment_val = Decimal("0.00")
+    total_adjustment_val = Decimal("0.00")
 
     rows = []
     for item in items:
         amt = item["amount"]
+        adjustment = item["adjustment"]
         if item["kind"] == "purchase":
             total_purchase_val += amt
             running_balance += amt
-            rows.append({
-                "kind": "purchase",
-                "date": item["date"],
-                "particulars": item["particulars"],
-                "credit": format_indian_amount(amt),   # purchase = credit (we owe vendor)
-                "debit": "",
-                "balance": format_indian_amount(running_balance),
-            })
+            rows.append(
+                {
+                    "kind": "purchase",
+                    "date": item["date"],
+                    "particulars": item["particulars"],
+                    "adjustment": format_adjustment_amount(adjustment),
+                    "credit": format_indian_amount(amt),  # purchase = credit (we owe vendor)
+                    "debit": "",
+                    "balance": format_indian_amount(running_balance),
+                }
+            )
         elif item["kind"] == "payment":
             total_payment_val += amt
+            total_adjustment_val += adjustment
             running_balance -= amt
-            rows.append({
-                "kind": "payment",
-                "date": item["date"],
-                "particulars": item["particulars"],
-                "stk_ref_lines": item.get("stk_ref_lines", []),
-                "debit": format_indian_amount(amt),
-                "credit": "",
-                "balance": format_indian_amount(running_balance),
-            })
+            running_balance += adjustment
+            rows.append(
+                {
+                    "kind": "payment",
+                    "date": item["date"],
+                    "particulars": item["particulars"],
+                    "stk_ref_lines": item.get("stk_ref_lines", []),
+                    "adjustment": format_adjustment_amount(adjustment),
+                    "debit": format_indian_amount(amt),
+                    "credit": "",
+                    "balance": format_indian_amount(running_balance),
+                }
+            )
 
-
-    closing_balance_val = total_purchase_val - total_payment_val
+    closing_balance_val = total_purchase_val + total_adjustment_val - total_payment_val
 
     # Reverse rows so latest entries are at the top and oldest entries are at the bottom
     rows.reverse()
@@ -137,6 +161,7 @@ def generate_vendor_statement_pdf(
             "period_label": period_label,
             "total_purchase": format_indian_amount(total_purchase_val),
             "total_payment": format_indian_amount(total_payment_val),
+            "total_adjustment": format_adjustment_amount(total_adjustment_val),
             "closing_balance": format_indian_amount(closing_balance_val),
             "rows": rows,
             "generated_at": timezone.localtime().strftime("%d-%m-%Y %H:%M"),

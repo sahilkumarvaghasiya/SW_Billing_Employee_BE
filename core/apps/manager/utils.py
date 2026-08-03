@@ -1,6 +1,6 @@
 from django.db.models import F, Q
 from rest_framework.exceptions import ValidationError
-
+from apps.sales.utils import format_indian_amount
 from apps.products.models import ProductVariant
 
 
@@ -56,3 +56,11 @@ def parse_timestamp_ordering(
     secondary = "updated_at" if sort_by == "created_at" else "created_at"
     prefix = "" if sort == "oldest" else "-"
     return f"{prefix}{sort_by}", f"{prefix}{secondary}"
+
+
+def format_adjustment_amount(value):
+    """Signed settlement adjustment: surcharge adds, discount subtracts."""
+    if not value:
+        return "-"
+    sign = "+" if value > 0 else "-"
+    return f"{sign}{format_indian_amount(abs(value))}"
