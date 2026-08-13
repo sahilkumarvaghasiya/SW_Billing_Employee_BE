@@ -138,8 +138,8 @@ def generate_vendor_statement_pdf(
 
     closing_balance_val = total_purchase_val + total_adjustment_val - total_payment_val
 
-    # Reverse rows so latest entries are at the top and oldest entries are at the bottom
-    rows.reverse()
+    # Rows stay chronological (oldest first) so the running balance reads
+    # top-to-bottom and ends on the closing balance.
 
     if start_date and end_date:
         period_label = f"{start_date.strftime('%d-%m-%Y')} to {end_date.strftime('%d-%m-%Y')}"
