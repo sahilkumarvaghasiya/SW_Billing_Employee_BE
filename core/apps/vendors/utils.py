@@ -1,3 +1,4 @@
+import logging
 import secrets
 from io import BytesIO
 
@@ -5,8 +6,11 @@ from barcode import Code128
 from barcode.writer import ImageWriter
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
+from django.db import DatabaseError
 
-from apps.products.models import Product
+from apps.products.models import Product, ProductVariant
+
+logger = logging.getLogger(__name__)
 
 # Code128 packs two digits into one symbol in code set C, so a digits-only
 # payload of even length prints at roughly half the width of the same number
@@ -34,22 +38,30 @@ def build_barcode_number(shop_id):
     """Allocate a unique digits-only barcode that fits a 50mm label.
 
     The prefix only groups barcodes by shop for readability — uniqueness is
-    enforced by checking the generated value against existing products, since
-    the random part is smaller than the UUID it replaces.
+    enforced by checking the generated value against existing variants, since
+    the random part is smaller than the UUID it replaces. The check runs in
+    the current tenant schema, so it is per-shop by definition.
+
+    A failed lookup must not block barcode generation: the candidate is
+    returned unchecked rather than 500ing the endpoint.
     """
     prefix = _barcode_shop_prefix(shop_id)
     upper_bound = 10 ** BARCODE_RANDOM_DIGITS
+    candidate = None
 
     for _ in range(BARCODE_MAX_ATTEMPTS):
         suffix = f"{secrets.randbelow(upper_bound):0{BARCODE_RANDOM_DIGITS}d}"
         candidate = f"{prefix}{suffix}"
-        if not Product.objects.filter(barcode_number=candidate).exists():
+        try:
+            if not ProductVariant.objects.filter(
+                barcode_number=candidate
+            ).exists():
+                return candidate
+        except DatabaseError:
+            logger.exception("Barcode uniqueness check failed; using candidate")
             return candidate
 
-    raise RuntimeError(
-        f"Could not allocate a unique barcode number after "
-        f"{BARCODE_MAX_ATTEMPTS} attempts"
-    )
+    return candidate
 
 
 def generate_1d_barcode_image(barcode_number):
